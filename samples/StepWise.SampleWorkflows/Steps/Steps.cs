@@ -4,7 +4,6 @@ using StepWise.SampleWorkflows.Requests;
 
 namespace StepWise.SampleWorkflows.Steps;
 
-// Marker type for the HTTP protocol
 public class HttpProtocol;
 
 public class LoginStep : HttpStep<LoginRequest<HttpProtocol>, LoginResponse>

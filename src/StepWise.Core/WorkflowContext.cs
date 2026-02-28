@@ -9,6 +9,7 @@ public class WorkflowContext
 {
     private readonly Dictionary<string, ITarget> _targets = new();
     private readonly Dictionary<string, object> _captures = new();
+    private readonly Dictionary<Type, List<object>> _accumulated = new();
 
     /// <summary>
     /// Registers a named target — a combination of location and protocol.
@@ -33,6 +34,38 @@ public class WorkflowContext
         var response = await target.ExecuteAsync(request, this);
         _captures[request.StepName] = response!;
         return response;
+    }
+
+    /// <summary>
+    /// Resolves all IFieldValue&lt;T&gt; fields on the item and appends it
+    /// to the accumulated list for its type.
+    /// </summary>
+    public Task BuildAsync<TItem>(TItem item) where TItem : BuildableRequest
+    {
+        var resolved = FieldValueResolver.ResolveObject(item, this);
+
+        if (!_accumulated.TryGetValue(typeof(TItem), out var list))
+        {
+            list = new List<object>();
+            _accumulated[typeof(TItem)] = list;
+        }
+
+        list.Add(resolved);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Returns all accumulated items of the given type as a list of resolved
+    /// dictionaries, then clears the accumulation for that type.
+    /// Returns an empty list if nothing has been accumulated.
+    /// </summary>
+    public List<Dictionary<string, object?>> GetAccumulated<TItem>() where TItem : BuildableRequest
+    {
+        if (!_accumulated.TryGetValue(typeof(TItem), out var list))
+            return new List<Dictionary<string, object?>>();
+
+        _accumulated.Remove(typeof(TItem));
+        return list.Cast<Dictionary<string, object?>>().ToList();
     }
 
     /// <summary>

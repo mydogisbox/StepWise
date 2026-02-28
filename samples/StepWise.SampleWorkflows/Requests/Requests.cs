@@ -7,7 +7,17 @@ namespace StepWise.SampleWorkflows.Requests;
 
 public record LoginResponse(string Token, string UserId);
 public record UserResponse(string Id, string Email, string FirstName, string LastName, string Role);
-public record OrderResponse(string Id, string UserId, string ProductName, int Quantity, decimal UnitPrice, string Status);
+public record OrderResponse(string Id, string UserId, List<OrderItemResponse> Items, string Status);
+public record OrderItemResponse(string ProductName, int Quantity, decimal UnitPrice);
+
+// --- Buildable items ---
+
+public record AddOrderItem() : BuildableRequest
+{
+    public IFieldValue<string>  ProductName { get; init; } = Static("Widget");
+    public IFieldValue<int>     Quantity    { get; init; } = Static(1);
+    public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
+}
 
 // --- Request Records ---
 
@@ -27,10 +37,8 @@ public record CreateUserRequest<TProtocol>() : WorkflowRequest<UserResponse>("cr
 
 public record CreateOrderRequest<TProtocol>() : WorkflowRequest<OrderResponse>("createOrder", "sample-api")
 {
-    public IFieldValue<string>  UserId      { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
-    public IFieldValue<string>  ProductName { get; init; } = Static("Widget");
-    public IFieldValue<int>     Quantity    { get; init; } = Static(1);
-    public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
+    public IFieldValue<string>                        UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
+    public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
 public record GetOrderRequest<TProtocol>() : WorkflowRequest<OrderResponse>("getOrder", "sample-api")
