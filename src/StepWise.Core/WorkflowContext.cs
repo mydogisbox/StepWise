@@ -91,4 +91,26 @@ public class WorkflowContext
     /// Returns true if a response has been captured for the given step name.
     /// </summary>
     public bool HasCapture(string stepName) => _captures.ContainsKey(stepName);
+
+    /// <summary>
+    /// Returns the raw captured object for a step without type casting.
+    /// Used by JSON workflow runners where the response type is not known at compile time.
+    /// </summary>
+    public object? GetRaw(string stepName)
+    {
+        if (!_captures.TryGetValue(stepName, out var value))
+            throw new WorkflowContextException(
+                $"No captured response found for step '{stepName}'. " +
+                $"Available steps: [{string.Join(", ", _captures.Keys)}]");
+        return value;
+    }
+
+    /// <summary>
+    /// Captures a raw response under the given step name.
+    /// Used by JSON workflow runners where the response type is not known at compile time.
+    /// </summary>
+    public void CaptureRaw(string stepName, object response)
+    {
+        _captures[stepName] = response;
+    }
 }

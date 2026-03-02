@@ -1,7 +1,4 @@
 using System.Reflection;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using StepWise.Core;
 
 namespace StepWise.Http;
@@ -13,12 +10,6 @@ namespace StepWise.Http;
 /// </summary>
 public class HttpTarget : ITarget
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
     private readonly string _baseUrl;
     private readonly IEnumerable<Assembly> _assemblies;
     private readonly Dictionary<Type, object> _stepCache = new();
@@ -35,7 +26,6 @@ public class HttpTarget : ITarget
         WorkflowRequest<TResponse> request,
         WorkflowContext context)
     {
-        // Dispatch to the concrete typed implementation via reflection
         var executeMethod = typeof(HttpTarget)
             .GetMethod(nameof(ExecuteTypedAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
             .MakeGenericMethod(request.GetType(), typeof(TResponse));
@@ -49,60 +39,16 @@ public class HttpTarget : ITarget
         where TRequest : WorkflowRequest<TResponse>
     {
         var step = ResolveStep<TRequest, TResponse>(typeof(TRequest));
-
-        // Resolve all IFieldValue<T> fields
         var resolvedFields = FieldValueResolver.Resolve<TResponse>(request, context);
 
-        // Substitute path parameters
-        var path = step.Path;
-        var pathParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in resolvedFields)
-        {
-            var placeholder = $"{{{key}}}";
-            if (path.Contains(placeholder, StringComparison.OrdinalIgnoreCase))
-            {
-                path = path.Replace(placeholder,
-                    Uri.EscapeDataString(value?.ToString() ?? ""),
-                    StringComparison.OrdinalIgnoreCase);
-                pathParamNames.Add(key);
-            }
-        }
+        var responseJson = await HttpExecutor.SendAsync(
+            _baseUrl,
+            step.Method,
+            step.Path,
+            resolvedFields,
+            req => step.Auth.ApplyAsync(req, context));
 
-        var url = _baseUrl + "/" + path.TrimStart('/');
-        var httpRequest = new HttpRequestMessage(step.Method, url);
-
-        // Build body excluding path params
-        var bodyFields = resolvedFields
-            .Where(kv => !pathParamNames.Contains(kv.Key))
-            .ToDictionary(kv => kv.Key, kv => kv.Value);
-
-        if (step.Method != HttpMethod.Get && step.Method != HttpMethod.Delete && bodyFields.Count > 0)
-        {
-            var json = JsonSerializer.Serialize(bodyFields, JsonOptions);
-            httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
-        }
-
-        // Apply auth
-        await step.Auth.ApplyAsync(httpRequest, context);
-
-        // Send
-        using var httpClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
-        var response = await httpClient.SendAsync(httpRequest);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync();
-            var locationHint = response.Headers.Location is { } loc
-                ? $" Redirect location: {loc}."
-                : string.Empty;
-            throw new HttpStepException(
-                $"Step '{request.StepName}' failed with status {(int)response.StatusCode} ({response.StatusCode}). " +
-                $"URL: {url}.{locationHint} Body: {body}");
-        }
-
-        var responseBody = await response.Content.ReadAsStringAsync();
-        return JsonSerializer.Deserialize<TResponse>(responseBody, JsonOptions)
-            ?? throw new HttpStepException($"Step '{request.StepName}' returned a null response body.");
+        return HttpExecutor.Deserialize<TResponse>(responseJson);
     }
 
     private HttpStep<TRequest, TResponse> ResolveStep<TRequest, TResponse>(Type requestType)

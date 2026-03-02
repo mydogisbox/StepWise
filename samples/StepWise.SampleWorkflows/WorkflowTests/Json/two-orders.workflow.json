@@ -1,0 +1,23 @@
+{
+  "name": "User_CanPlaceTwoOrders_EachGetsDistinctId",
+  "targets": {
+    "sample-api": { "baseUrl": "http://localhost:5000" }
+  },
+  "requests": [
+    "Requests/auth.requests.json",
+    "Requests/order.requests.json"
+  ],
+  "steps": [
+    { "step": "login" },
+    { "step": "createUser" },
+    { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" } } },
+    { "step": "createOrder", "captureAs": "firstOrder" },
+    { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" } } },
+    { "step": "createOrder", "captureAs": "secondOrder" }
+  ],
+  "assertions": [
+    { "notEqual": ["firstOrder.id",  "secondOrder.id"] },
+    { "equal":    ["firstOrder.status",  "pending"] },
+    { "equal":    ["secondOrder.status", "pending"] }
+  ]
+}

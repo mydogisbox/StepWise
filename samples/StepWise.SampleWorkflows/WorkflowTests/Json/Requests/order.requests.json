@@ -1,0 +1,42 @@
+{
+  "steps": {
+    "createUser": {
+      "target": "sample-api",
+      "method": "POST",
+      "path": "/users",
+      "auth": { "type": "bearer", "from": "login.token" },
+      "defaults": {
+        "email":     { "generated": "email" },
+        "firstName": { "static": "Test" },
+        "lastName":  { "static": "User" },
+        "role":      { "static": "user" }
+      }
+    },
+    "addOrderItem": {
+      "defaults": {
+        "productName": { "static": "Widget" },
+        "quantity":    { "static": 1 },
+        "unitPrice":   { "static": 9.99 }
+      }
+    },
+    "createOrder": {
+      "target": "sample-api",
+      "method": "POST",
+      "path": "/orders",
+      "auth": { "type": "bearer", "from": "login.token" },
+      "defaults": {
+        "userId": { "from": "createUser.id" },
+        "items":  { "from": "__build__addOrderItem" }
+      }
+    },
+    "getOrder": {
+      "target": "sample-api",
+      "method": "GET",
+      "path": "/orders/{orderId}",
+      "auth": { "type": "bearer", "from": "login.token" },
+      "defaults": {
+        "orderId": { "from": "createOrder.id" }
+      }
+    }
+  }
+}

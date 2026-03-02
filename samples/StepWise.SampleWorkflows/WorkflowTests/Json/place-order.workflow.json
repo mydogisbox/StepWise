@@ -1,0 +1,20 @@
+{
+  "name": "NewUser_CanPlaceOrder_StatusIsPending",
+  "targets": {
+    "sample-api": { "baseUrl": "http://localhost:5000" }
+  },
+  "requests": [
+    "Requests/auth.requests.json",
+    "Requests/order.requests.json"
+  ],
+  "steps": [
+    { "step": "login" },
+    { "step": "createUser" },
+    { "build": "addOrderItem" },
+    { "step": "createOrder" }
+  ],
+  "assertions": [
+    { "equal":  ["createOrder.status", "pending"] },
+    { "single": "createOrder.items" }
+  ]
+}

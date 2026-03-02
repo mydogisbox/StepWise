@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -18,6 +17,8 @@ public static class AppFactory
 
     public static WebApplication Create(WebApplicationBuilder builder)
     {
+        builder.Services.AddSingleton<SampleApiService>();
+
         builder.Services.AddAuthentication("Bearer")
             .AddJwtBearer("Bearer", options =>
             {
@@ -38,9 +39,6 @@ public static class AppFactory
 
         app.UseAuthentication();
         app.UseAuthorization();
-
-        var users = new ConcurrentDictionary<string, UserResponse>();
-        var orders = new ConcurrentDictionary<string, OrderResponse>();
 
         app.MapPost("/auth/login", ([FromBody] LoginRequest req) =>
         {
@@ -63,45 +61,33 @@ public static class AppFactory
             ));
         }).AllowAnonymous();
 
-        app.MapPost("/users", ([FromBody] CreateUserRequest req) =>
+        app.MapPost("/users", (SampleApiService svc, [FromBody] CreateUserRequest req) =>
         {
-            var user = new UserResponse(
-                Id: Guid.NewGuid().ToString(),
-                Email: req.Email,
-                FirstName: req.FirstName,
-                LastName: req.LastName,
-                Role: req.Role
-            );
-            users[user.Id] = user;
+            var user = svc.CreateUser(req);
             return Results.Created($"/users/{user.Id}", user);
         }).RequireAuthorization();
 
-        app.MapGet("/users/{id}", (string id) =>
-            users.TryGetValue(id, out var user)
-                ? Results.Ok(user)
-                : Results.NotFound(new { error = $"User '{id}' not found." })
-        ).RequireAuthorization();
-
-        app.MapPost("/orders", ([FromBody] CreateOrderRequest req) =>
+        app.MapGet("/users/{id}", (SampleApiService svc, string id) =>
         {
-            if (!users.ContainsKey(req.UserId))
-                return Results.BadRequest(new { error = $"User '{req.UserId}' does not exist." });
-
-            var order = new OrderResponse(
-                Id: Guid.NewGuid().ToString(),
-                UserId: req.UserId,
-                Items: req.Items.Select(i => new OrderItemResponse(i.ProductName, i.Quantity, i.UnitPrice)).ToList(),
-                Status: "pending"
-            );
-            orders[order.Id] = order;
-            return Results.Created($"/orders/{order.Id}", order);
+            try { return Results.Ok(svc.GetUser(id)); }
+            catch (KeyNotFoundException) { return Results.NotFound(new { error = $"User '{id}' not found." }); }
         }).RequireAuthorization();
 
-        app.MapGet("/orders/{id}", (string id) =>
-            orders.TryGetValue(id, out var order)
-                ? Results.Ok(order)
-                : Results.NotFound(new { error = $"Order '{id}' not found." })
-        ).RequireAuthorization();
+        app.MapPost("/orders", (SampleApiService svc, [FromBody] CreateOrderRequest req) =>
+        {
+            try
+            {
+                var order = svc.CreateOrder(req);
+                return Results.Created($"/orders/{order.Id}", order);
+            }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+        }).RequireAuthorization();
+
+        app.MapGet("/orders/{id}", (SampleApiService svc, string id) =>
+        {
+            try { return Results.Ok(svc.GetOrder(id)); }
+            catch (KeyNotFoundException) { return Results.NotFound(new { error = $"Order '{id}' not found." }); }
+        }).RequireAuthorization();
 
         return app;
     }

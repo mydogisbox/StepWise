@@ -389,11 +389,3 @@ public class OrderWorkflowTests : ApiFlowTestBase
 
 `From(...)` is not used directly in test bodies. Tests get values from prior step return values directly.
 `From(...)` belongs in `Default` definitions, encoding the "happy path" assumption for reusable workflow composition.
-
-```csharp
-// In a Default — From(...) makes sense here
-public static PlaceOrderRequest Default => new(
-    UserId: From(ctx => ctx.Get<UserResponse>("createUser").Id),
-    // ...
-);
-```

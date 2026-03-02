@@ -1,0 +1,21 @@
+{
+  "name": "NewUser_CanPlaceOrder_WithSpecificItems",
+  "targets": {
+    "sample-api": { "baseUrl": "http://localhost:5000" }
+  },
+  "requests": [
+    "Requests/auth.requests.json",
+    "Requests/order.requests.json"
+  ],
+  "steps": [
+    { "step": "login" },
+    { "step": "createUser" },
+    { "build": "addOrderItem", "with": { "productName": { "static": "Deluxe Widget" }, "quantity": { "static": 3 } } },
+    { "build": "addOrderItem", "with": { "productName": { "static": "Basic Widget" } } },
+    { "step": "createOrder" }
+  ],
+  "assertions": [
+    { "equal":    ["createOrder.status", "pending"] },
+    { "notEmpty": "createOrder.items" }
+  ]
+}

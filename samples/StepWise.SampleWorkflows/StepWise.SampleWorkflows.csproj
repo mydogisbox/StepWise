@@ -20,6 +20,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\StepWise.Core\StepWise.Core.csproj" />
     <ProjectReference Include="..\..\src\StepWise.Http\StepWise.Http.csproj" />
+    <ProjectReference Include="..\..\src\StepWise.Json\StepWise.Json.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="WorkflowTests\Json\**\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

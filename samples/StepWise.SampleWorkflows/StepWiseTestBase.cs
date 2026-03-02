@@ -4,10 +4,6 @@ using StepWise.Http;
 
 namespace StepWise.SampleWorkflows;
 
-/// <summary>
-/// Base class for workflow tests. Exposes ExecuteAsync and BuildAsync directly,
-/// delegating to an internal WorkflowContext so tests stay uncluttered.
-/// </summary>
 public abstract class StepWiseTestBase
 {
     private const string SampleApiUrl = "http://localhost:5000";

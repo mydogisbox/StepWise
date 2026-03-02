@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StepWise.Core", "src\StepWi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StepWise.Http", "src\StepWise.Http\StepWise.Http.csproj", "{22222222-2222-2222-2222-222222222222}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StepWise.Json", "src\StepWise.Json\StepWise.Json.csproj", "{44444444-4444-4444-4444-444444444444}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StepWise.UnitTests", "tests\StepWise.UnitTests\StepWise.UnitTests.csproj", "{33333333-3333-3333-3333-333333333333}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StepWise.SampleApi", "samples\StepWise.SampleApi\StepWise.SampleApi.csproj", "{44444444-4444-4444-4444-444444444444}"

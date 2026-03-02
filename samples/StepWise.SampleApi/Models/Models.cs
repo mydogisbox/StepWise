@@ -10,3 +10,4 @@ public record OrderItemRequest(string ProductName, int Quantity, decimal UnitPri
 public record OrderItemResponse(string ProductName, int Quantity, decimal UnitPrice);
 public record CreateOrderRequest(string UserId, List<OrderItemRequest> Items);
 public record OrderResponse(string Id, string UserId, List<OrderItemResponse> Items, string Status);
+
