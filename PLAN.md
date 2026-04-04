@@ -238,7 +238,7 @@ Without `captureAs`, each step is captured under its definition name (`createOrd
 
 ```json
 {
-  "sample-api": "http://localhost:5000"
+  "sample-api": "http://localhost:4200"
 }
 ```
 

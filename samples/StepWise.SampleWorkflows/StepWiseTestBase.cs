@@ -6,7 +6,7 @@ namespace StepWise.SampleWorkflows;
 
 public abstract class StepWiseTestBase
 {
-    private const string SampleApiUrl = "http://localhost:5000";
+    private const string SampleApiUrl = "http://localhost:4200";
 
     private readonly WorkflowContext _context;
 

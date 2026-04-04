@@ -89,6 +89,8 @@ public static class AppFactory
             catch (KeyNotFoundException) { return Results.NotFound(new { error = $"Order '{id}' not found." }); }
         }).RequireAuthorization();
 
+        app.MapGet("/health", () => Results.Ok());
+
         return app;
     }
 }

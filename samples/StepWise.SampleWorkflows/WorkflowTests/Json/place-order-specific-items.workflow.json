@@ -1,7 +1,7 @@
 {
   "name": "NewUser_CanPlaceOrder_WithSpecificItems",
   "targets": {
-    "sample-api": { "baseUrl": "http://localhost:5000" }
+    "sample-api": { "baseUrl": "http://localhost:4200" }
   },
   "requests": [
     "Requests/auth.requests.json",
