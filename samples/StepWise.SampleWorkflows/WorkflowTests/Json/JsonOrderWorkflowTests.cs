@@ -5,6 +5,12 @@ namespace StepWise.SampleWorkflows.WorkflowTests.Json;
 
 public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 {
+    protected override IReadOnlyList<string> RequestPaths =>
+    [
+        "Requests/auth.requests.json",
+        "Requests/order.requests.json"
+    ];
+
     protected override string TargetsPath => "WorkflowTests/Json/targets.json";
 
     [Fact]

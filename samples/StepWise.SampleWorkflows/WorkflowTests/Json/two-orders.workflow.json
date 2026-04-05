@@ -1,12 +1,5 @@
 {
   "name": "User_CanPlaceTwoOrders_EachGetsDistinctId",
-  "targets": {
-    "sample-api": { "baseUrl": "http://localhost:4200" }
-  },
-  "requests": [
-    "Requests/auth.requests.json",
-    "Requests/order.requests.json"
-  ],
   "steps": [
     { "step": "login" },
     { "step": "createUser" },

@@ -6,11 +6,16 @@ namespace StepWise.Json;
 /// </summary>
 public abstract class JsonWorkflowTestBase
 {
-    protected abstract string TargetsPath { get; }
+    /// <summary>
+    /// Paths to .requests.json files, resolved relative to each workflow file's directory.
+    /// </summary>
+    protected virtual IReadOnlyList<string> RequestPaths => [];
+
+    protected virtual string? TargetsPath => null;
 
     protected async Task RunWorkflowAsync(string workflowPath)
     {
-        var result = await JsonWorkflowRunner.RunAsync(workflowPath, TargetsPath);
+        var result = await JsonWorkflowRunner.RunAsync(workflowPath, RequestPaths, TargetsPath);
         result.ThrowIfFailed();
     }
 }

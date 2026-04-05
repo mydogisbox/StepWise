@@ -47,19 +47,22 @@ public class WorkflowContext
         int intervalMs = 500,
         int timeoutMs = 10000)
     {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         while (true)
         {
             var response = await ExecuteAsync(request);
             if (until(response)) return response;
 
-            var remaining = deadline - DateTime.UtcNow;
-            if (remaining <= TimeSpan.Zero)
+            var remaining = timeoutMs - sw.ElapsedMilliseconds;
+
+            if (remaining <= 0)
                 throw new WorkflowContextException(
                     $"PollAsync timed out after {timeoutMs}ms waiting for step '{request.StepName}'.");
 
-            await Task.Delay((int)Math.Min(intervalMs, remaining.TotalMilliseconds));
+            var delayMs = Math.Min(intervalMs, remaining);
+
+            await Task.Delay((int)delayMs);
         }
     }
 

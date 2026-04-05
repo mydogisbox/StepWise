@@ -6,7 +6,7 @@ using StepWise.Http;
 namespace StepWise.Json;
 
 /// <summary>
-/// Pure workflow execution engine. Takes a WorkflowDefinition with explicit request files,
+/// Pure workflow execution engine. Callers supply request definitions and target base URLs;
 /// executes all steps, evaluates assertions, and returns a WorkflowResult.
 /// No xUnit dependency. Runnable from tests, CLI, or API.
 /// </summary>
@@ -21,17 +21,19 @@ public class JsonWorkflowRunner
     // ── Loading ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Loads a workflow file and resolves its request file paths relative to the workflow file.
+    /// Loads a workflow file and merges step definitions from <paramref name="requestPaths"/>
+    /// (resolved relative to the workflow file's directory when not absolute).
     /// </summary>
     public static (WorkflowDefinition Workflow, Dictionary<string, StepDefinition> StepDefs) Load(
-        string workflowPath)
+        string workflowPath,
+        IReadOnlyList<string> requestPaths)
     {
         var workflowJson = File.ReadAllText(workflowPath);
         var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(workflowJson, JsonOptions)
             ?? throw new JsonWorkflowException($"Failed to deserialize workflow from '{workflowPath}'.");
 
         var workflowDir = Path.GetDirectoryName(Path.GetFullPath(workflowPath))!;
-        var stepDefs = LoadRequestFiles(workflow.Requests, workflowDir);
+        var stepDefs = LoadRequestFiles(requestPaths, workflowDir);
 
         return (workflow, stepDefs);
     }
@@ -41,7 +43,7 @@ public class JsonWorkflowRunner
     /// Paths are resolved relative to baseDir.
     /// </summary>
     public static Dictionary<string, StepDefinition> LoadRequestFiles(
-        List<string> requestPaths,
+        IReadOnlyList<string> requestPaths,
         string baseDir)
     {
         var merged = new Dictionary<string, StepDefinition>(StringComparer.OrdinalIgnoreCase);
@@ -73,21 +75,18 @@ public class JsonWorkflowRunner
     // ── Running ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Executes a workflow given pre-loaded step definitions and optional target overrides.
+    /// Executes a workflow given pre-loaded step definitions and target base URLs by name.
     /// </summary>
     public static async Task<WorkflowResult> RunAsync(
         WorkflowDefinition workflow,
         Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, string>? targetOverrides = null)
+        Dictionary<string, string> targets)
     {
         var baseUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, target) in workflow.Targets)
-            baseUrls[key] = target.BaseUrl;
-        if (targetOverrides is not null)
-            foreach (var (key, url) in targetOverrides)
-                baseUrls[key] = url;
+        foreach (var (key, url) in targets)
+            baseUrls[key] = url;
 
-        var captures    = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var captures = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         var stepResults = new List<StepResult>();
 
         foreach (var invocation in workflow.Steps)
@@ -126,14 +125,15 @@ public class JsonWorkflowRunner
     }
 
     /// <summary>
-    /// Convenience overload that loads both files from disk.
+    /// Loads the workflow and request and targets files from disk.
     /// </summary>
     public static Task<WorkflowResult> RunAsync(
         string workflowPath,
+        IReadOnlyList<string> requestPaths,
         string? targetsPath = null)
     {
-        var (workflow, stepDefs) = Load(workflowPath);
-        var targets = targetsPath is not null ? LoadTargets(targetsPath) : null;
+        var (workflow, stepDefs) = Load(workflowPath, requestPaths);
+        var targets = LoadTargets(targetsPath);
         return RunAsync(workflow, stepDefs, targets);
     }
 
@@ -305,14 +305,14 @@ public class JsonWorkflowRunner
         {
             if (assertion.Equal is { Count: 2 })
             {
-                var left  = ResolveAssertionExpr(assertion.Equal[0], captures);
+                var left = ResolveAssertionExpr(assertion.Equal[0], captures);
                 var right = ResolveAssertionExpr(assertion.Equal[1], captures);
                 if (!string.Equals(left?.ToString(), right?.ToString(), StringComparison.OrdinalIgnoreCase))
                     errors.Add($"Expected '{assertion.Equal[0]}' ({left}) to equal '{assertion.Equal[1]}' ({right}).");
             }
             else if (assertion.NotEqual is { Count: 2 })
             {
-                var left  = ResolveAssertionExpr(assertion.NotEqual[0], captures);
+                var left = ResolveAssertionExpr(assertion.NotEqual[0], captures);
                 var right = ResolveAssertionExpr(assertion.NotEqual[1], captures);
                 if (string.Equals(left?.ToString(), right?.ToString(), StringComparison.OrdinalIgnoreCase))
                     errors.Add($"Expected '{assertion.NotEqual[0]}' to not equal '{assertion.NotEqual[1]}' but both were '{left}'.");

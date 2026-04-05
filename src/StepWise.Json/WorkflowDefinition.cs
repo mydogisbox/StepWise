@@ -3,36 +3,19 @@ using System.Text.Json.Serialization;
 namespace StepWise.Json;
 
 /// <summary>
-/// A workflow definition loaded from a .workflow.json file.
-/// References external .requests.json files rather than embedding step definitions inline.
+/// A workflow definition loaded from a .workflow.json file — step names, optional assertions.
+/// Request files and execution targets are supplied by the caller, not embedded in this JSON.
 /// </summary>
 public record WorkflowDefinition(
     string Name,
-    Dictionary<string, TargetDefinition> Targets,
-
-    /// <summary>
-    /// Paths to .requests.json files, resolved relative to the workflow file.
-    /// Step definitions are merged from all listed files in order.
-    /// </summary>
-    List<string> Requests,
-
     List<StepInvocation> Steps,
-    List<AssertionDefinition>? Assertions = null
-);
+    List<AssertionDefinition>? Assertions = null);
 
 /// <summary>
 /// The content of a .requests.json file — a dictionary of named step definitions.
 /// </summary>
 public record RequestsDefinition(
     Dictionary<string, StepDefinition> Steps
-);
-
-/// <summary>
-/// A named execution target — for now always HTTP.
-/// </summary>
-public record TargetDefinition(
-    string BaseUrl,
-    string Type = "http"
 );
 
 /// <summary>

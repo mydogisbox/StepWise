@@ -59,12 +59,12 @@ public class WorkflowContextPollTests
     public async Task ThrowsWorkflowContextException_OnTimeout()
     {
         var fake = new FakeTarget();
-        for (var i = 0; i < 100; i++) fake.Enqueue(new StatusResponse("Pending"));
+        for (var i = 0; i < 10; i++) fake.Enqueue(new StatusResponse("Pending"));
 
         var context = new WorkflowContext().WithTarget("test-api", fake);
         var ex = await Assert.ThrowsAsync<WorkflowContextException>(() =>
             context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed",
-                intervalMs: 1, timeoutMs: 50));
+                intervalMs: 10, timeoutMs: 50));
 
         Assert.Contains("getStatus", ex.Message);
     }
@@ -133,14 +133,12 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         };
         var workflow = new WorkflowDefinition(
             Name: "PollTest",
-            Targets: new Dictionary<string, TargetDefinition>
-            {
-                ["api"] = new TargetDefinition($"http://127.0.0.1:{_port}")
-            },
-            Requests: [],
             Steps: [step]);
         return (workflow, stepDefs);
     }
+
+    private Dictionary<string, string> TestTargets =>
+        new(StringComparer.OrdinalIgnoreCase) { ["api"] = $"http://127.0.0.1:{_port}" };
 
     [Fact]
     public async Task Poll_ResolvesWhenConditionEventuallyMet()
@@ -158,7 +156,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             TimeoutMs = 5000
         });
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
 
         Assert.True(result.Passed);
         Assert.Equal(3, _callCount[0]);
@@ -176,7 +174,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             TimeoutMs = 5000
         });
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
 
         Assert.True(result.Passed);
         Assert.Equal(1, _callCount[0]);
@@ -196,7 +194,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         });
 
         var ex = await Assert.ThrowsAsync<JsonWorkflowException>(() =>
-            JsonWorkflowRunner.RunAsync(workflow, stepDefs));
+            JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets));
 
         Assert.Contains("getStatus", ex.Message);
         Assert.Contains("timed out", ex.Message);
@@ -222,7 +220,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             Assertions = [new AssertionDefinition { Equal = ["getStatus.status", "Completed"] }]
         };
 
-        var result = await JsonWorkflowRunner.RunAsync(withAssertion, stepDefs);
+        var result = await JsonWorkflowRunner.RunAsync(withAssertion, stepDefs, TestTargets);
 
         Assert.True(result.Passed);
         Assert.Empty(result.AssertionErrors);
