@@ -102,9 +102,14 @@ public class JsonWorkflowRunner
                 var result = BuildItem(invocation, stepDefs, captures);
                 stepResults.Add(result);
             }
+            else if (invocation.Poll is not null)
+            {
+                var result = await PollStepAsync(invocation, stepDefs, baseUrls, captures);
+                stepResults.Add(result);
+            }
             else
             {
-                throw new JsonWorkflowException("Each step must have either 'step' or 'build'.");
+                throw new JsonWorkflowException("Each step must have 'step', 'build', or 'poll'.");
             }
         }
 
@@ -191,6 +196,32 @@ public class JsonWorkflowRunner
         list.Add(resolvedFields);
 
         return new StepResult(buildName, resolvedFields);
+    }
+
+    private static async Task<StepResult> PollStepAsync(
+        StepInvocation invocation,
+        Dictionary<string, StepDefinition> stepDefs,
+        Dictionary<string, string> baseUrls,
+        Dictionary<string, object?> captures)
+    {
+        var stepName = invocation.Poll!;
+        var executeInvocation = new StepInvocation { Step = stepName, CaptureAs = invocation.CaptureAs, With = invocation.With };
+        var deadline = DateTime.UtcNow.AddMilliseconds(invocation.TimeoutMs);
+
+        while (true)
+        {
+            var result = await ExecuteStepAsync(executeInvocation, stepDefs, baseUrls, captures);
+
+            if (invocation.Until is null || EvaluateAssertions([invocation.Until], captures).Count == 0)
+                return result;
+
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                throw new JsonWorkflowException(
+                    $"Poll step '{stepName}' timed out after {invocation.TimeoutMs}ms.");
+
+            await Task.Delay((int)Math.Min(invocation.IntervalMs, remaining.TotalMilliseconds));
+        }
     }
 
     private static Dictionary<string, object?> MergeAndResolve(

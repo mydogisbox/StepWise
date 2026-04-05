@@ -37,6 +37,33 @@ public class WorkflowContext
     }
 
     /// <summary>
+    /// Repeatedly executes a request until <paramref name="until"/> returns true
+    /// or <paramref name="timeoutMs"/> elapses, with <paramref name="intervalMs"/> between attempts.
+    /// The final successful response is captured under <see cref="WorkflowRequest{TResponse}.StepName"/>.
+    /// </summary>
+    public async Task<TResponse> PollAsync<TResponse>(
+        WorkflowRequest<TResponse> request,
+        Func<TResponse, bool> until,
+        int intervalMs = 500,
+        int timeoutMs = 10000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+
+        while (true)
+        {
+            var response = await ExecuteAsync(request);
+            if (until(response)) return response;
+
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                throw new WorkflowContextException(
+                    $"PollAsync timed out after {timeoutMs}ms waiting for step '{request.StepName}'.");
+
+            await Task.Delay((int)Math.Min(intervalMs, remaining.TotalMilliseconds));
+        }
+    }
+
+    /// <summary>
     /// Resolves all IFieldValue&lt;T&gt; fields on the item and appends it
     /// to the accumulated list for its type.
     /// </summary>

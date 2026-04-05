@@ -66,11 +66,28 @@ public record AuthDefinition
 
 /// <summary>
 /// A single step invocation — references a step by name with optional overrides.
+/// Exactly one of Step, Build, or Poll must be set.
 /// </summary>
 public record StepInvocation
 {
     public string? Step  { get; init; }
     public string? Build { get; init; }
+
+    /// <summary>
+    /// Name of a step definition to re-execute until <see cref="Until"/> passes or
+    /// <see cref="TimeoutMs"/> elapses.
+    /// </summary>
+    public string? Poll { get; init; }
+
+    /// <summary>A single assertion evaluated after each poll attempt.</summary>
+    public AssertionDefinition? Until { get; init; }
+
+    /// <summary>Milliseconds between poll attempts. Default: 500.</summary>
+    public int IntervalMs { get; init; } = 500;
+
+    /// <summary>Maximum milliseconds to wait before failing. Default: 10000.</summary>
+    public int TimeoutMs { get; init; } = 10000;
+
     public string? CaptureAs { get; init; }
     public Dictionary<string, FieldValueDefinition>? With { get; init; }
 }
