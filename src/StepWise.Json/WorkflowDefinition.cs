@@ -105,4 +105,5 @@ public record AssertionDefinition
     [JsonPropertyName("single")]   public string? Single   { get; init; }
     [JsonPropertyName("empty")]    public string? Empty    { get; init; }
     [JsonPropertyName("notEmpty")] public string? NotEmpty { get; init; }
+    [JsonPropertyName("count")]    public List<string>? Count    { get; init; }
 }

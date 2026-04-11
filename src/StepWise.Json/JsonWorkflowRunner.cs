@@ -382,6 +382,15 @@ public class JsonWorkflowRunner
                 if (count != 0)
                     errors.Add($"Expected '{assertion.Empty}' to be empty but found {count} items.");
             }
+            else if (assertion.Count is { Count: 2 })
+            {
+                var value = ResolveAssertionExpr(assertion.Count[0], captures);
+                var actual = CountItems(value);
+                if (!int.TryParse(assertion.Count[1], out var expected))
+                    errors.Add($"Invalid count value '{assertion.Count[1]}' — must be an integer.");
+                else if (actual != expected)
+                    errors.Add($"Expected '{assertion.Count[0]}' to have {expected} item(s) but found {actual}.");
+            }
             else if (assertion.NotEmpty is not null)
             {
                 var value = ResolveAssertionExpr(assertion.NotEmpty, captures);

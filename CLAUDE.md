@@ -164,6 +164,17 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 }
 ```
 
+### Assertion types
+
+| Type | Example | Meaning |
+|------|---------|---------|
+| `equal` | `"equal": ["createOrder.status", "pending"]` | two expressions are equal |
+| `notEqual` | `"notEqual": ["firstOrder.id", "secondOrder.id"]` | two expressions differ |
+| `single` | `"single": "createOrder.items"` | collection has exactly 1 item |
+| `empty` | `"empty": "createOrder.items"` | collection is empty |
+| `notEmpty` | `"notEmpty": "createOrder.id"` | value is present / collection is non-empty |
+| `count` | `"count": ["createOrder.items", "2"]` | collection has exactly N items |
+
 ### Field value types
 
 ```json

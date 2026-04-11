@@ -7,7 +7,7 @@
     { "step": "createOrder" }
   ],
   "assertions": [
-    { "equal":    ["createOrder.status", "pending"] },
-    { "notEmpty": "createOrder.items" }
+    { "equal": ["createOrder.status", "pending"] },
+    { "count": ["createOrder.items", "2"] }
   ]
 }

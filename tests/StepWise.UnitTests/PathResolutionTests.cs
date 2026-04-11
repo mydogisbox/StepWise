@@ -257,3 +257,58 @@ public class AssertionPathTests
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
     }
 }
+
+public class CountAssertionTests
+{
+    private static FieldValueDefinition StaticField(object value) =>
+        new() { Static = JsonSerializer.SerializeToElement(value) };
+
+    private static Dictionary<string, StepDefinition> ItemStepDefs => new()
+    {
+        ["addItem"] = new() { AccumulateAs = "items", Defaults = new() { ["name"] = StaticField("Widget") } }
+    };
+
+    [Fact]
+    public async Task Count_Passes_WhenExactMatch()
+    {
+        var workflow = new WorkflowDefinition(
+            "test",
+            [
+                new StepInvocation { Build = "addItem" },
+                new StepInvocation { Build = "addItem" },
+                new StepInvocation { Build = "addItem" },
+            ],
+            [new AssertionDefinition { Count = ["items", "3"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, ItemStepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task Count_Fails_WhenCountMismatch()
+    {
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Build = "addItem" }],
+            [new AssertionDefinition { Count = ["items", "3"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, ItemStepDefs, []);
+        Assert.False(result.Passed);
+        Assert.Single(result.AssertionErrors);
+        Assert.Contains("1", result.AssertionErrors[0]);
+        Assert.Contains("3", result.AssertionErrors[0]);
+    }
+
+    [Fact]
+    public async Task Count_Fails_WithDescriptiveMessage_WhenInvalidNumber()
+    {
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Build = "addItem" }],
+            [new AssertionDefinition { Count = ["items", "notanumber"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, ItemStepDefs, []);
+        Assert.False(result.Passed);
+        Assert.Contains("notanumber", result.AssertionErrors[0]);
+    }
+}
