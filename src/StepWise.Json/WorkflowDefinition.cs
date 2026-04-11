@@ -28,6 +28,9 @@ public record StepDefinition
     public string Path   { get; init; } = "";
     public AuthDefinition? Auth { get; init; }
     public Dictionary<string, FieldValueDefinition>? Defaults { get; init; }
+
+    /// <summary>Required for build steps — names the collection that accumulated items are stored under.</summary>
+    public string? AccumulateAs { get; init; }
 }
 
 /// <summary>

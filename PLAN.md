@@ -175,6 +175,14 @@ JSON workflow files reference separate `.requests.json` files and a `targets.jso
 ```json
 {
   "steps": {
+    "addOrderItem": {
+      "accumulateAs": "orderItems",
+      "defaults": {
+        "productName": { "static": "Widget" },
+        "quantity":    { "static": 1 },
+        "unitPrice":   { "static": 9.99 }
+      }
+    },
     "createOrder": {
       "target": "sample-api",
       "method": "POST",
@@ -182,7 +190,7 @@ JSON workflow files reference separate `.requests.json` files and a `targets.jso
       "auth": { "type": "bearer", "from": "login.token" },
       "defaults": {
         "userId": { "from": "createUser.id" },
-        "items":  { "from": "__build__addOrderItem" }
+        "items":  { "from": "orderItems" }
       }
     },
     "getOrder": {

@@ -13,6 +13,7 @@
       }
     },
     "addOrderItem": {
+      "accumulateAs": "orderItems",
       "defaults": {
         "productName": { "static": "Widget" },
         "quantity":    { "static": 1 },
@@ -26,7 +27,7 @@
       "auth": { "type": "bearer", "from": "login.token" },
       "defaults": {
         "userId": { "from": "createUser.id" },
-        "items":  { "from": "__build__addOrderItem" }
+        "items":  { "from": "orderItems" }
       }
     },
     "getOrder": {

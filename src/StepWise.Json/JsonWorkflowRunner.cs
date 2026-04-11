@@ -184,9 +184,11 @@ public class JsonWorkflowRunner
             throw new JsonWorkflowException(
                 $"Build step '{buildName}' not found in loaded request files.");
 
-        var resolvedFields = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
+        var accumulationKey = stepDef.AccumulateAs
+            ?? throw new JsonWorkflowException(
+                $"Build step '{buildName}' must specify 'accumulateAs' in its step definition.");
 
-        var accumulationKey = $"__build__{buildName}";
+        var resolvedFields = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
         if (!captures.TryGetValue(accumulationKey, out var existing) ||
             existing is not List<Dictionary<string, object?>> list)
         {
