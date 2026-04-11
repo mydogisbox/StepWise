@@ -346,26 +346,88 @@ public class JsonWorkflowRunner
     }
 
     private static object? ResolveAssertionExpr(string expr, Dictionary<string, object?> captures)
-        => expr.Contains('.') ? ResolveCapturePath(expr, captures)
+        => (expr.Contains('.') || expr.Contains('[')) ? ResolveCapturePath(expr, captures)
          : captures.TryGetValue(expr, out var v) ? v
          : (object?)expr;
 
     internal static object? ResolveCapturePath(string path, Dictionary<string, object?> captures)
     {
-        var parts = path.Split('.', 2);
-        if (!captures.TryGetValue(parts[0], out var captured)) return null;
-        if (parts.Length == 1) return captured;
+        var segments = TokenizePath(path);
+        if (segments.Count == 0) return null;
 
-        if (captured is Dictionary<string, JsonElement> dict)
+        if (!captures.TryGetValue(segments[0], out var current)) return null;
+
+        for (int i = 1; i < segments.Count; i++)
         {
-            var key = dict.Keys.FirstOrDefault(k =>
-                string.Equals(k, parts[1], StringComparison.OrdinalIgnoreCase));
-            return key is null ? null : JsonValueResolver.JsonElementToObject(dict[key]);
+            if (current is null) return null;
+            current = ResolveSegment(current, segments[i]);
         }
 
-        var prop = captured?.GetType().GetProperty(parts[1],
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        return prop?.GetValue(captured);
+        return current;
+    }
+
+    // Splits a path like "step.items[0].name" into ["step", "items", "[0]", "name"]
+    private static List<string> TokenizePath(string path)
+    {
+        var segments = new List<string>();
+        foreach (var dotPart in path.Split('.'))
+        {
+            if (string.IsNullOrEmpty(dotPart)) continue;
+            var bracketIdx = dotPart.IndexOf('[');
+            if (bracketIdx < 0)
+            {
+                segments.Add(dotPart);
+                continue;
+            }
+            if (bracketIdx > 0)
+                segments.Add(dotPart[..bracketIdx]);
+            var remaining = dotPart[bracketIdx..];
+            while (remaining.Length > 0 && remaining[0] == '[')
+            {
+                var close = remaining.IndexOf(']');
+                if (close < 0) break;
+                segments.Add(remaining[..(close + 1)]);
+                remaining = remaining[(close + 1)..];
+            }
+        }
+        return segments;
+    }
+
+    private static object? ResolveSegment(object current, string segment)
+    {
+        // Array index segment, e.g. "[0]"
+        if (segment.StartsWith('[') && segment.EndsWith(']'))
+        {
+            if (!int.TryParse(segment[1..^1], out var idx)) return null;
+            return current switch
+            {
+                List<object?> list       => idx >= 0 && idx < list.Count ? list[idx] : null,
+                object?[] arr            => idx >= 0 && idx < arr.Length ? arr[idx] : null,
+                System.Collections.IList ilist => idx >= 0 && idx < ilist.Count ? ilist[idx] : null,
+                JsonElement el when el.ValueKind == JsonValueKind.Array
+                                         => idx >= 0 && idx < el.GetArrayLength()
+                                            ? JsonValueResolver.JsonElementToObject(el[idx]) : null,
+                _                        => null,
+            };
+        }
+
+        // Property/key segment
+        return current switch
+        {
+            Dictionary<string, object?> objDict => objDict.TryGetValue(
+                objDict.Keys.FirstOrDefault(k =>
+                    string.Equals(k, segment, StringComparison.OrdinalIgnoreCase)) ?? "",
+                out var oval) ? oval : null,
+            Dictionary<string, JsonElement> dict => dict.Keys.FirstOrDefault(k =>
+                string.Equals(k, segment, StringComparison.OrdinalIgnoreCase)) is { } key
+                ? JsonValueResolver.JsonElementToObject(dict[key]) : null,
+            JsonElement el when el.ValueKind == JsonValueKind.Object =>
+                el.TryGetProperty(segment, out var jprop)
+                ? JsonValueResolver.JsonElementToObject(jprop) : null,
+            _ => current.GetType().GetProperty(segment,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?.GetValue(current),
+        };
     }
 
     private static int CountItems(object? value)

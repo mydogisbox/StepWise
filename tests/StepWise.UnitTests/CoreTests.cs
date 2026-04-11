@@ -29,15 +29,19 @@ public class FieldValueTests
 
 public class WorkflowContextTests
 {
-    [Fact]
-    public void Get_ThrowsDescriptiveException_WhenStepNotFound()
+    private record FakeResponse();
+    private record FakeRequest() : WorkflowRequest<FakeResponse>("login", "test-api");
+    private class FakeTarget : ITarget
     {
-        var context = new WorkflowContext();
-        // Manually poke a capture in via reflection for test purposes
-        var captures = typeof(WorkflowContext)
-            .GetField("_captures", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .GetValue(context) as Dictionary<string, object>;
-        captures!["login"] = new { Token = "tok" };
+        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+            => Task.FromResult((TResponse)(object)new FakeResponse());
+    }
+
+    [Fact]
+    public async Task Get_ThrowsDescriptiveException_WhenStepNotFound()
+    {
+        var context = new WorkflowContext().WithTarget("test-api", new FakeTarget());
+        await context.ExecuteAsync(new FakeRequest());
 
         var ex = Assert.Throws<WorkflowContextException>(
             () => context.Get<object>("missingStep"));

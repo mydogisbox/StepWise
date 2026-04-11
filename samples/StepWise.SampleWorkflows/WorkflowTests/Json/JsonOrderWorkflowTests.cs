@@ -28,4 +28,8 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task User_CanPlaceTwoOrders_EachGetsDistinctId() =>
         RunWorkflowAsync("WorkflowTests/Json/two-orders.workflow.json");
+
+    [Fact]
+    public Task PlacedOrder_ItemsCanBeInspectedByIndex() =>
+        RunWorkflowAsync("WorkflowTests/Json/order-item-details.workflow.json");
 }
