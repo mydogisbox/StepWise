@@ -186,7 +186,11 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 { "sample-api": "http://localhost:4200" }
 ```
 
-### `captureAs` — running the same step twice
+### `captureAs` — naming captures explicitly
+
+`captureAs` works on both `step` and `build` invocations. Without it, captures are stored under the step's definition name.
+
+Use `captureAs` on HTTP steps when the same step runs more than once and you need to distinguish the results:
 
 ```json
 {
@@ -200,7 +204,22 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 }
 ```
 
-Without `captureAs`, each step is captured under its definition name. Use `captureAs` when the same step appears more than once and you need to distinguish the results.
+Use `captureAs` on build steps to pin a specific item's fields for later reference, independent of the accumulation:
+
+```json
+{
+  "steps": [
+    { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" } } },
+    { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" } }, "captureAs": "lastItem" }
+  ],
+  "assertions": [
+    { "equal": ["addOrderItem.productName", "Widget A"] },
+    { "equal": ["lastItem.productName",     "Widget B"] }
+  ]
+}
+```
+
+Without `captureAs`, each build overwrites the previous individual capture for that step name — so `addOrderItem` above holds "Widget A" because the second build used `captureAs` instead.
 
 ### xUnit runner
 
@@ -240,14 +259,24 @@ Assertion expressions containing `.` or `[` are resolved as paths. Bare strings 
 
 ## Capture runtime model
 
-| Source | Type stored in captures |
-|--------|------------------------|
-| HTTP step response | `Dictionary<string, JsonElement>` |
-| Build step accumulation | `List<Dictionary<string, object?>>` |
-| JSON array after `JsonElementToObject` | `List<object?>` |
-| JSON object after `JsonElementToObject` | `Dictionary<string, object?>` |
+| Source | Key | Type stored in captures |
+|--------|-----|------------------------|
+| HTTP step response | step name or `captureAs` | `Dictionary<string, JsonElement>` |
+| HTTP step request payload | `captureRequestAs` value | `Dictionary<string, object?>` |
+| Build step — individual result | step name or `captureAs` | `Dictionary<string, object?>` |
+| Build step — accumulation | `accumulateAs` value | `List<Dictionary<string, object?>>` |
+| JSON array after `JsonElementToObject` | — | `List<object?>` |
+| JSON object after `JsonElementToObject` | — | `Dictionary<string, object?>` |
 
-**Only the response is captured from HTTP steps.** The request payload is resolved, sent, and discarded. If a downstream step needs a value that was in the request, the server must echo it back, or re-derive it via `static`/`generated`/`from`.
+Each build step writes to **two** capture keys: the accumulation list (always, under `accumulateAs`) and the individual result (under the step name or `captureAs`). When the same step name is built multiple times without `captureAs`, the individual result capture is overwritten each time — only the last one is accessible by step name.
+
+By default, only the response is captured from HTTP steps. Use `captureRequestAs` to also capture the resolved request payload under a named key, making it available to subsequent steps and assertions:
+
+```json
+{ "step": "createUser", "captureRequestAs": "userRequest", "with": { "firstName": { "static": "Jane" } } }
+```
+
+After this step, `userRequest.firstName` resolves to `"Jane"` and the response is still captured under `createUser` as usual. The request capture type is `Dictionary<string, object?>`.
 
 ---
 

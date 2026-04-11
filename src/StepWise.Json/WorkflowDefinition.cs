@@ -75,6 +75,7 @@ public record StepInvocation
     public int TimeoutMs { get; init; } = 10000;
 
     public string? CaptureAs { get; init; }
+    public string? CaptureRequestAs { get; init; }
     public Dictionary<string, FieldValueDefinition>? With { get; init; }
 }
 

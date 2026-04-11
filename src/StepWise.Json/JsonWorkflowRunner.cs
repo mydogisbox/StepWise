@@ -161,6 +161,9 @@ public class JsonWorkflowRunner
         var method = new HttpMethod(stepDef.Method.ToUpper());
         var applyAuth = BuildAuthApplier(stepDef.Auth, captures);
 
+        if (invocation.CaptureRequestAs is { } requestKey)
+            captures[requestKey] = resolvedFields;
+
         var responseJson = await HttpExecutor.SendAsync(
             baseUrl, method, stepDef.Path, resolvedFields, applyAuth);
 
@@ -197,7 +200,10 @@ public class JsonWorkflowRunner
         }
         list.Add(resolvedFields);
 
-        return new StepResult(buildName, resolvedFields);
+        var captureName = invocation.CaptureAs ?? buildName;
+        captures[captureName] = resolvedFields;
+
+        return new StepResult(captureName, resolvedFields);
     }
 
     private static async Task<StepResult> PollStepAsync(

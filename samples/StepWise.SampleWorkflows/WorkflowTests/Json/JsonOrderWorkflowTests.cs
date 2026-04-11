@@ -32,4 +32,12 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task PlacedOrder_ItemsCanBeInspectedByIndex() =>
         RunWorkflowAsync("WorkflowTests/Json/order-item-details.workflow.json");
+
+    [Fact]
+    public Task BuildStep_ResultIsAvailableAsCapture() =>
+        RunWorkflowAsync("WorkflowTests/Json/build-step-capture.workflow.json");
+
+    [Fact]
+    public Task CreateUser_RequestFieldsAvailableViaCaptureRequestAs() =>
+        RunWorkflowAsync("WorkflowTests/Json/capture-request.workflow.json");
 }

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using StepWise.Core;
 using StepWise.Json;
 using Xunit;
@@ -224,5 +225,134 @@ public class JsonWorkflowRunnerPollTests : IDisposable
 
         Assert.True(result.Passed);
         Assert.Empty(result.AssertionErrors);
+    }
+}
+
+public class CaptureRequestAsTests : IDisposable
+{
+    private readonly HttpListener _listener;
+    private readonly int _port;
+
+    public CaptureRequestAsTests()
+    {
+        var tcp = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        _port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        tcp.Stop();
+
+        _listener = new HttpListener();
+        _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
+        _listener.Start();
+
+        _ = Task.Run(async () =>
+        {
+            while (_listener.IsListening)
+            {
+                HttpListenerContext ctx;
+                try { ctx = await _listener.GetContextAsync(); }
+                catch { break; }
+
+                var bytes = System.Text.Encoding.UTF8.GetBytes("{\"id\":\"resp-1\"}");
+                ctx.Response.ContentType = "application/json";
+                ctx.Response.ContentLength64 = bytes.Length;
+                await ctx.Response.OutputStream.WriteAsync(bytes);
+                ctx.Response.Close();
+            }
+        });
+    }
+
+    public void Dispose() => _listener.Stop();
+
+    private Dictionary<string, string> TestTargets =>
+        new(StringComparer.OrdinalIgnoreCase) { ["api"] = $"http://127.0.0.1:{_port}" };
+
+    [Fact]
+    public async Task CaptureRequestAs_StoresResolvedFields()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["createItem"] = new()
+            {
+                Target = "api", Method = "POST", Path = "/items",
+                Defaults = new()
+                {
+                    ["name"]  = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") },
+                    ["price"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement(9.99) }
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Step = "createItem", CaptureRequestAs = "itemRequest" }],
+            [
+                new AssertionDefinition { Equal    = ["itemRequest.name",  "Widget"] },
+                new AssertionDefinition { NotEmpty = "itemRequest.price" }
+            ]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task CaptureRequestAs_IsAvailableToSubsequentSteps()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["createItem"] = new()
+            {
+                Target = "api", Method = "POST", Path = "/items",
+                Defaults = new()
+                {
+                    ["name"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") }
+                }
+            },
+            ["createOrder"] = new()
+            {
+                Target = "api", Method = "POST", Path = "/orders",
+                Defaults = new()
+                {
+                    ["itemName"] = new FieldValueDefinition { From = "itemRequest.name" }
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [
+                new StepInvocation { Step = "createItem",  CaptureRequestAs = "itemRequest" },
+                new StepInvocation { Step = "createOrder" }
+            ],
+            [new AssertionDefinition { Equal = ["itemRequest.name", "Widget"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task CaptureRequestAs_DoesNotAffectResponseCapture()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["createItem"] = new()
+            {
+                Target = "api", Method = "POST", Path = "/items",
+                Defaults = new()
+                {
+                    ["name"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") }
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Step = "createItem", CaptureRequestAs = "itemRequest" }],
+            [
+                new AssertionDefinition { Equal = ["createItem.id",      "resp-1"] },
+                new AssertionDefinition { Equal = ["itemRequest.name",   "Widget"] }
+            ]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
     }
 }

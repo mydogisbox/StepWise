@@ -83,6 +83,83 @@ public class FromValuePathResolutionTests
 }
 
 /// <summary>
+/// Tests that Build step results are captured under the step name (and captureAs)
+/// in addition to being appended to the accumulation list.
+/// </summary>
+public class BuildStepCaptureTests
+{
+    private static FieldValueDefinition StaticField(object value) =>
+        new() { Static = JsonSerializer.SerializeToElement(value) };
+
+    [Fact]
+    public async Task BuildResult_IsAvailable_UnderStepName()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new() { ["name"] = StaticField("Widget") }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Build = "addItem" }],
+            [new AssertionDefinition { Equal = ["addItem.name", "Widget"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task BuildResult_CaptureAs_OverridesDefaultKey()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new() { ["name"] = StaticField("Widget") }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Build = "addItem", CaptureAs = "lastItem" }],
+            [new AssertionDefinition { Equal = ["lastItem.name", "Widget"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task BuildResult_StillAccumulates()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new() { ["name"] = StaticField("Widget") }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [
+                new StepInvocation { Build = "addItem" },
+                new StepInvocation { Build = "addItem" },
+            ],
+            [new AssertionDefinition { NotEmpty = "items" }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+        Assert.Equal(2, ((System.Collections.IList)result.Captures["items"]!).Count);
+    }
+}
+
+/// <summary>
 /// Tests assertion evaluation end-to-end using Build steps (no HTTP required).
 /// Exercises array indexing and deep nesting via WorkflowResult.
 /// </summary>
