@@ -1,8 +1,7 @@
 {
   "name": "NewUser_CanPlaceOrder_StatusIsPending",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem" },
     { "step": "createOrder" }
   ],

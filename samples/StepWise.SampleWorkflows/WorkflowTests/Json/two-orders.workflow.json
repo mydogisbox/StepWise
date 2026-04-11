@@ -1,15 +1,14 @@
 {
   "name": "User_CanPlaceTwoOrders_EachGetsDistinctId",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" } } },
     { "step": "createOrder", "captureAs": "firstOrder" },
     { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" } } },
     { "step": "createOrder", "captureAs": "secondOrder" }
   ],
   "assertions": [
-    { "notEqual": ["firstOrder.id",  "secondOrder.id"] },
+    { "notEqual": ["firstOrder.id",      "secondOrder.id"] },
     { "equal":    ["firstOrder.status",  "pending"] },
     { "equal":    ["secondOrder.status", "pending"] }
   ]

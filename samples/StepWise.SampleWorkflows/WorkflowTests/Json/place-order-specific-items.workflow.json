@@ -1,8 +1,7 @@
 {
   "name": "NewUser_CanPlaceOrder_WithSpecificItems",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem", "with": { "productName": { "static": "Deluxe Widget" }, "quantity": { "static": 3 } } },
     { "build": "addOrderItem", "with": { "productName": { "static": "Basic Widget" } } },
     { "step": "createOrder" }

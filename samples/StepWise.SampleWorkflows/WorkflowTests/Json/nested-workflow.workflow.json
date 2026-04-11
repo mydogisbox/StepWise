@@ -1,7 +1,7 @@
 {
   "name": "NestedWorkflow_PlaceOrder",
   "steps": [
-    { "workflow": "WorkflowTests/Json/setup-user.workflow.json" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem" },
     { "step": "createOrder" }
   ],

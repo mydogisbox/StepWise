@@ -1,8 +1,7 @@
 {
   "name": "BuildStep_ResultIsAvailableAsCapture",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" } } },
     { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" } }, "captureAs": "lastItem" },
     { "step": "createOrder" }

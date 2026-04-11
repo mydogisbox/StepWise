@@ -13,6 +13,11 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 
     protected override string TargetsPath => "WorkflowTests/Json/targets.json";
 
+    protected override IReadOnlyList<string> SharedWorkflowPaths =>
+    [
+        "WorkflowTests/Json/setup-user.workflow.json"
+    ];
+
     [Fact]
     public Task NewUser_CanPlaceOrder_StatusIsPending() =>
         RunWorkflowAsync("WorkflowTests/Json/place-order.workflow.json");

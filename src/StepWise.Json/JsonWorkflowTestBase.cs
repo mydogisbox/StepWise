@@ -13,9 +13,15 @@ public abstract class JsonWorkflowTestBase
 
     protected virtual string? TargetsPath => null;
 
+    /// <summary>
+    /// Paths to .workflow.json files to pre-load as named sub-workflows.
+    /// Referenced in workflow files by their <c>name</c> field rather than a file path.
+    /// </summary>
+    protected virtual IReadOnlyList<string> SharedWorkflowPaths => [];
+
     protected async Task RunWorkflowAsync(string workflowPath)
     {
-        var result = await JsonWorkflowRunner.RunAsync(workflowPath, RequestPaths, TargetsPath);
+        var result = await JsonWorkflowRunner.RunAsync(workflowPath, RequestPaths, TargetsPath, SharedWorkflowPaths);
         result.ThrowIfFailed();
     }
 }

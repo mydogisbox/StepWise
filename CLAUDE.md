@@ -8,6 +8,8 @@ StepWise is a C# workflow testing library for APIs. It lets you write integratio
 
 Always use `./test.sh`. It starts the sample API, runs all test projects, and tears the API down. Do not run `dotnet test` directly — integration tests depend on the API being up.
 
+Run tests after every change to verify nothing is broken.
+
 ---
 
 ## Architecture
@@ -188,13 +190,13 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 
 ### `workflow` — nesting workflows
 
-A step can run another workflow file inline. Its steps execute against the same captures and targets as the parent; its assertions are skipped. All captures produced by the nested workflow are available to subsequent parent steps.
+A step can embed another workflow by name. Its steps execute against the same captures and targets as the parent; its assertions are skipped. All captures produced by the nested workflow are available to subsequent parent steps.
 
 ```json
 {
   "name": "PlaceOrder",
   "steps": [
-    { "workflow": "WorkflowTests/Json/setup-user.workflow.json" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem" },
     { "step": "createOrder" }
   ],
@@ -205,7 +207,16 @@ A step can run another workflow file inline. Its steps execute against the same 
 }
 ```
 
-Paths are resolved relative to the working directory. Nesting is recursive — a nested workflow can itself contain `workflow` steps.
+Named workflows are pre-loaded by the test class via `SharedWorkflowPaths`. The `workflow` value is matched against each file's `name` field:
+
+```csharp
+protected override IReadOnlyList<string> SharedWorkflowPaths =>
+[
+    "WorkflowTests/Json/setup-user.workflow.json"
+];
+```
+
+If the value doesn't match any loaded name, it is treated as a file path (fallback). Nesting is recursive — a named workflow can itself contain `workflow` steps.
 
 ### `captureAs` — naming captures explicitly
 

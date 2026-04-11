@@ -1,14 +1,13 @@
 {
   "name": "PlacedOrder_CanBeRetrieved",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem" },
     { "step": "createOrder" },
     { "step": "getOrder" }
   ],
   "assertions": [
-    { "equal": ["createOrder.id",    "getOrder.id"] },
-    { "equal": ["getOrder.status",   "pending"] }
+    { "equal": ["createOrder.id",  "getOrder.id"] },
+    { "equal": ["getOrder.status", "pending"] }
   ]
 }

@@ -1,15 +1,14 @@
 {
   "name": "PlacedOrder_ItemsCanBeInspectedByIndex",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" },
+    { "workflow": "SetupUser" },
     { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" }, "quantity": { "static": 2 } } },
     { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" }, "quantity": { "static": 5 } } },
     { "step": "createOrder" },
     { "step": "getOrder" }
   ],
   "assertions": [
-    { "equal":    ["createOrder.status",              "pending"] },
+    { "equal":    ["createOrder.status",               "pending"] },
     { "equal":    ["createOrder.items[0].productName", "Widget A"] },
     { "equal":    ["createOrder.items[1].productName", "Widget B"] },
     { "notEmpty": "createOrder.items[0].productName" },
