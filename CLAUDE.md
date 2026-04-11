@@ -186,6 +186,27 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 { "sample-api": "http://localhost:4200" }
 ```
 
+### `workflow` — nesting workflows
+
+A step can run another workflow file inline. Its steps execute against the same captures and targets as the parent; its assertions are skipped. All captures produced by the nested workflow are available to subsequent parent steps.
+
+```json
+{
+  "name": "PlaceOrder",
+  "steps": [
+    { "workflow": "WorkflowTests/Json/setup-user.workflow.json" },
+    { "build": "addOrderItem" },
+    { "step": "createOrder" }
+  ],
+  "assertions": [
+    { "equal":    ["createOrder.status", "pending"] },
+    { "notEmpty": "createUser.id" }
+  ]
+}
+```
+
+Paths are resolved relative to the working directory. Nesting is recursive — a nested workflow can itself contain `workflow` steps.
+
 ### `captureAs` — naming captures explicitly
 
 `captureAs` works on both `step` and `build` invocations. Without it, captures are stored under the step's definition name.
@@ -277,6 +298,27 @@ By default, only the response is captured from HTTP steps. Use `captureRequestAs
 ```
 
 After this step, `userRequest.firstName` resolves to `"Jane"` and the response is still captured under `createUser` as usual. The request capture type is `Dictionary<string, object?>`.
+
+---
+
+## Choosing a capture strategy
+
+| Situation | What to use |
+|-----------|-------------|
+| Share common setup steps across multiple workflows | `{ "workflow": "path/to/setup.workflow.json" }` |
+| Reference a response field from a step that runs once | Step name: `createUser.id` |
+| Same HTTP step runs multiple times; need to tell results apart | `captureAs` on each invocation: `"firstOrder"`, `"secondOrder"` |
+| Need a more readable alias for a response | `captureAs: "token"` instead of `login.token` |
+| Server doesn't echo a request field back; need it downstream | `captureRequestAs: "userRequest"` then `userRequest.email` |
+| Inspect a specific item in a built collection | Accumulation index: `orderItems[0].productName` |
+| Reference the fields of the most recently built item | Build step name: `addOrderItem.productName` (overwritten each time the step builds without `captureAs`) |
+| Pin a specific built item independently of the accumulation | `captureAs` on the build invocation: `"specialItem"` then `specialItem.productName` |
+
+**Key rules:**
+- `captureAs` and the step name are mutually exclusive for a given invocation — `captureAs` wins if set.
+- `captureRequestAs` is additive — it doesn't replace the response capture; both are available.
+- Build steps always write to the `accumulateAs` list regardless of `captureAs`.
+- Without `captureAs`, repeated builds of the same step overwrite the individual result capture; the accumulation still grows.
 
 ---
 

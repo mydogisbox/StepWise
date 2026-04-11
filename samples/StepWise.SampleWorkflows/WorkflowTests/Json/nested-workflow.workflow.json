@@ -1,0 +1,13 @@
+{
+  "name": "NestedWorkflow_PlaceOrder",
+  "steps": [
+    { "workflow": "WorkflowTests/Json/setup-user.workflow.json" },
+    { "build": "addOrderItem" },
+    { "step": "createOrder" }
+  ],
+  "assertions": [
+    { "equal":    ["createOrder.status", "pending"] },
+    { "notEmpty": "createUser.id" },
+    { "notEmpty": "login.token" }
+  ]
+}

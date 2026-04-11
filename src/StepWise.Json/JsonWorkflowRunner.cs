@@ -87,30 +87,7 @@ public class JsonWorkflowRunner
             baseUrls[key] = url;
 
         var captures = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        var stepResults = new List<StepResult>();
-
-        foreach (var invocation in workflow.Steps)
-        {
-            if (invocation.Step is not null)
-            {
-                var result = await ExecuteStepAsync(invocation, stepDefs, baseUrls, captures);
-                stepResults.Add(result);
-            }
-            else if (invocation.Build is not null)
-            {
-                var result = BuildItem(invocation, stepDefs, captures);
-                stepResults.Add(result);
-            }
-            else if (invocation.Poll is not null)
-            {
-                var result = await PollStepAsync(invocation, stepDefs, baseUrls, captures);
-                stepResults.Add(result);
-            }
-            else
-            {
-                throw new JsonWorkflowException("Each step must have 'step', 'build', or 'poll'.");
-            }
-        }
+        var stepResults = await ExecuteStepsAsync(workflow.Steps, stepDefs, baseUrls, captures);
 
         var assertionErrors = workflow.Assertions is not null
             ? EvaluateAssertions(workflow.Assertions, captures)
@@ -138,6 +115,41 @@ public class JsonWorkflowRunner
     }
 
     // ── Step execution ───────────────────────────────────────────────────────
+
+    private static async Task<List<StepResult>> ExecuteStepsAsync(
+        IEnumerable<StepInvocation> steps,
+        Dictionary<string, StepDefinition> stepDefs,
+        Dictionary<string, string> baseUrls,
+        Dictionary<string, object?> captures)
+    {
+        var results = new List<StepResult>();
+        foreach (var invocation in steps)
+        {
+            if (invocation.Step is not null)
+                results.Add(await ExecuteStepAsync(invocation, stepDefs, baseUrls, captures));
+            else if (invocation.Build is not null)
+                results.Add(BuildItem(invocation, stepDefs, captures));
+            else if (invocation.Poll is not null)
+                results.Add(await PollStepAsync(invocation, stepDefs, baseUrls, captures));
+            else if (invocation.Workflow is not null)
+                results.AddRange(await ExecuteNestedWorkflowAsync(invocation.Workflow, stepDefs, baseUrls, captures));
+            else
+                throw new JsonWorkflowException("Each step must have 'step', 'build', 'poll', or 'workflow'.");
+        }
+        return results;
+    }
+
+    private static async Task<List<StepResult>> ExecuteNestedWorkflowAsync(
+        string workflowPath,
+        Dictionary<string, StepDefinition> stepDefs,
+        Dictionary<string, string> baseUrls,
+        Dictionary<string, object?> captures)
+    {
+        var json = File.ReadAllText(workflowPath);
+        var nested = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions)
+            ?? throw new JsonWorkflowException($"Failed to deserialize nested workflow from '{workflowPath}'.");
+        return await ExecuteStepsAsync(nested.Steps, stepDefs, baseUrls, captures);
+    }
 
     private static async Task<StepResult> ExecuteStepAsync(
         StepInvocation invocation,

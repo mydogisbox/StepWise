@@ -40,4 +40,8 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task CreateUser_RequestFieldsAvailableViaCaptureRequestAs() =>
         RunWorkflowAsync("WorkflowTests/Json/capture-request.workflow.json");
+
+    [Fact]
+    public Task NestedWorkflow_StepsAndCapturesFlowIntoParent() =>
+        RunWorkflowAsync("WorkflowTests/Json/nested-workflow.workflow.json");
 }

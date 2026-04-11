@@ -76,6 +76,7 @@ public record StepInvocation
 
     public string? CaptureAs { get; init; }
     public string? CaptureRequestAs { get; init; }
+    public string? Workflow { get; init; }
     public Dictionary<string, FieldValueDefinition>? With { get; init; }
 }
 
