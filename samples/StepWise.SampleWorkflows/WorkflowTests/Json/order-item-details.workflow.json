@@ -14,6 +14,7 @@
     { "notEmpty": "createOrder.items[0].productName" },
     { "equal":    ["getOrder.items[0].productName",    "Widget A"] },
     { "equal":    ["getOrder.items[1].productName",    "Widget B"] },
-    { "equal":    ["createOrder.id",                   "getOrder.id"] }
+    { "equal":    ["createOrder.id",                   "getOrder.id"] },
+    { "equal":    ["getOrder.items[?productName=Widget B].quantity", "5"] }
   ]
 }

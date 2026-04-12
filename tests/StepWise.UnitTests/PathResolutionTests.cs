@@ -80,6 +80,34 @@ public class FromValuePathResolutionTests
         var captures = ApiCaptures("getItems", """{"items":[1,2]}""");
         Assert.Null(new FromJsonValue("getItems.items[5]").Resolve(captures));
     }
+
+    [Fact]
+    public void FieldLookup_ResolvesMatchingItem()
+    {
+        var captures = ApiCaptures("getOrders", """{"orders":[{"id":"a","status":"pending"},{"id":"b","status":"shipped"}]}""");
+        Assert.Equal("shipped", new FromJsonValue("getOrders.orders[?id=b].status").Resolve(captures));
+    }
+
+    [Fact]
+    public void FieldLookup_IsCaseInsensitive()
+    {
+        var captures = ApiCaptures("getOrders", """{"orders":[{"id":"A","status":"pending"},{"id":"B","status":"shipped"}]}""");
+        Assert.Equal("shipped", new FromJsonValue("getOrders.orders[?id=b].status").Resolve(captures));
+    }
+
+    [Fact]
+    public void FieldLookup_ReturnsNull_WhenNoMatch()
+    {
+        var captures = ApiCaptures("getOrders", """{"orders":[{"id":"a","status":"pending"}]}""");
+        Assert.Null(new FromJsonValue("getOrders.orders[?id=z].status").Resolve(captures));
+    }
+
+    [Fact]
+    public void FieldLookup_ReturnsFirstMatch_WhenMultipleMatch()
+    {
+        var captures = ApiCaptures("getData", """{"items":[{"type":"widget","name":"First"},{"type":"widget","name":"Second"}]}""");
+        Assert.Equal("First", new FromJsonValue("getData.items[?type=widget].name").Resolve(captures));
+    }
 }
 
 /// <summary>

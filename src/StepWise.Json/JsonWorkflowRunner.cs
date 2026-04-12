@@ -453,10 +453,29 @@ public class JsonWorkflowRunner
 
     private static object? ResolveSegment(object current, string segment)
     {
-        // Array index segment, e.g. "[0]"
+        // Bracket segment, e.g. "[0]" or "[field=value]"
         if (segment.StartsWith('[') && segment.EndsWith(']'))
         {
-            if (!int.TryParse(segment[1..^1], out var idx)) return null;
+            var inner = segment[1..^1];
+            var eqIdx = inner.IndexOf('=');
+
+            // Field lookup: [?field=value]
+            if (inner.StartsWith('?') && eqIdx > 1)
+            {
+                var field = inner[1..eqIdx];
+                var value = inner[(eqIdx + 1)..];
+                var items = current switch
+                {
+                    System.Collections.IEnumerable e and not string => e.Cast<object?>(),
+                    _ => null
+                };
+                return items?.FirstOrDefault(item =>
+                    item is not null &&
+                    string.Equals(ResolveSegment(item, field)?.ToString(), value, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Numeric index: [0]
+            if (!int.TryParse(inner, out var idx)) return null;
             return current switch
             {
                 List<object?> list       => idx >= 0 && idx < list.Count ? list[idx] : null,

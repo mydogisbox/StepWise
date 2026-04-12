@@ -293,8 +293,9 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 
 - First segment is always the capture key (step name or `captureAs` value)
 - Supports arbitrary nesting: `step.a.b.c`
-- Supports array indexing: `step.items[0]`
-- Supports combinations: `step.items[1].meta.label`
+- Supports numeric index: `step.items[0]`
+- Supports field lookup: `step.items[?id=abc-123]` — finds the first element where `id` equals `abc-123` (case-insensitive)
+- Supports combinations: `step.items[?productName=Widget B].quantity`
 
 Assertion expressions containing `.` or `[` are resolved as paths. Bare strings with neither are treated as literals if not found as a capture key.
 
