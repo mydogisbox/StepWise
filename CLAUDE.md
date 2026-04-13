@@ -199,6 +199,34 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 { "sample-api": "http://localhost:4200" }
 ```
 
+### `poll` — polling a step until a condition is met
+
+Re-executes a step definition on an interval until an `until` assertion passes or the timeout is reached. Useful for async operations where the result isn't immediately available.
+
+```json
+{
+  "steps": [
+    { "step": "createOrder" },
+    {
+      "poll": "getOrder",
+      "until": { "equal": ["getOrder.status", "shipped"] },
+      "intervalMs": 500,
+      "timeoutMs": 10000
+    }
+  ],
+  "assertions": [
+    { "equal": ["getOrder.status", "shipped"] }
+  ]
+}
+```
+
+- `poll` — the step definition name to re-execute (same as `step`)
+- `until` — a single assertion evaluated after each attempt; polling stops when it passes
+- `intervalMs` — delay between attempts (default: 500)
+- `timeoutMs` — max wait before throwing (default: 10000)
+- `captureAs` — works the same as on `step` invocations
+- If `until` is omitted the step executes once and succeeds immediately
+
 ### `workflow` — nesting workflows
 
 A step can embed another workflow by name. Its steps execute against the same captures and targets as the parent; its assertions are skipped. All captures produced by the nested workflow are available to subsequent parent steps.
@@ -328,7 +356,8 @@ After this step, `userRequest.firstName` resolves to `"Jane"` and the response i
 
 | Situation | What to use |
 |-----------|-------------|
-| Share common setup steps across multiple workflows | `{ "workflow": "path/to/setup.workflow.json" }` |
+| Share common setup steps across multiple workflows | `{ "workflow": "SetupUser" }` |
+| Wait for an async result to reach a desired state | `{ "poll": "getOrder", "until": { "equal": ["getOrder.status", "shipped"] } }` |
 | Reference a response field from a step that runs once | Step name: `createUser.id` |
 | Same HTTP step runs multiple times; need to tell results apart | `captureAs` on each invocation: `"firstOrder"`, `"secondOrder"` |
 | Need a more readable alias for a response | `captureAs: "token"` instead of `login.token` |
