@@ -1,0 +1,13 @@
+{
+  "name": "GetUsersByRole_QueryParamFilters",
+  "steps": [
+    { "workflow": "SetupUser" },
+    { "step": "createUser", "with": { "role": { "static": "admin" } }, "captureAs": "adminUser" },
+    { "step": "getUsers", "captureAs": "userList" },
+    { "step": "getUsers", "query": { "role": { "static": "admin" } }, "captureAs": "adminList" }
+  ],
+  "assertions": [
+    { "equal": ["userList[?email=createUser.email].role",  "user"] },
+    { "equal": ["adminList[?email=adminUser.email].role", "admin"] }
+  ]
+}

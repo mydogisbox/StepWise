@@ -1,0 +1,15 @@
+{
+  "name": "GetOrder_PathParamOverride_RetrievesCorrectOrder",
+  "steps": [
+    { "workflow": "SetupUser" },
+    { "build": "addOrderItem" },
+    { "step": "createOrder", "captureAs": "firstOrder" },
+    { "build": "addOrderItem" },
+    { "step": "createOrder", "captureAs": "secondOrder" },
+    { "step": "getOrder", "pathParams": { "orderId": { "from": "firstOrder.id" } }, "captureAs": "retrieved" }
+  ],
+  "assertions": [
+    { "equal":    ["retrieved.id", "firstOrder.id"] },
+    { "notEqual": ["retrieved.id", "secondOrder.id"] }
+  ]
+}

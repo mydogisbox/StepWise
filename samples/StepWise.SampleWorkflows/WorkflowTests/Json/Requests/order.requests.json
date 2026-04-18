@@ -35,7 +35,7 @@
       "method": "GET",
       "path": "/orders/{orderId}",
       "auth": { "type": "bearer", "from": "login.token" },
-      "defaults": {
+      "pathParams": {
         "orderId": { "from": "createOrder.id" }
       }
     }

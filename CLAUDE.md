@@ -85,6 +85,29 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 }
 ```
 
+### URL parameters and query parameters
+
+Override `PathParams` for `{placeholder}` substitution and `Query` for query string parameters. Both are excluded from the request body:
+
+```csharp
+public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder", "sample-api")
+{
+    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
+    {
+        ["orderId"] = From(ctx => ctx.Get<OrderResponse>("createOrder").Id)
+    };
+}
+
+public record SearchOrdersRequest() : WorkflowRequest<List<OrderResponse>>("searchOrders", "sample-api")
+{
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Query { get; init; } = new Dictionary<string, IFieldValue<string>>
+    {
+        ["status"] = Static("pending"),
+        ["userId"] = From(ctx => ctx.Get<UserResponse>("createUser").Id)
+    };
+}
+```
+
 ### Test class
 
 xUnit creates a new instance per class — each test gets a fresh `WorkflowContext` with no shared state:
@@ -164,6 +187,74 @@ var order = await ExecuteAsync(new CreateOrderRequest());
   }
 }
 ```
+
+### URL parameters (`pathParams`)
+
+Values to substitute into `{placeholder}` segments of the path. Never sent in the request body:
+
+```json
+"getOrder": {
+  "target": "sample-api",
+  "method": "GET",
+  "path": "/orders/{orderId}",
+  "auth": { "type": "bearer", "from": "login.token" },
+  "pathParams": {
+    "orderId": { "from": "createOrder.id" }
+  }
+}
+```
+
+Multiple path parameters are supported. The key must match the placeholder name exactly.
+
+### Query parameters (`query`)
+
+Key-value pairs appended to the URL as a query string. Resolved independently of the request body:
+
+```json
+"searchOrders": {
+  "target": "sample-api",
+  "method": "GET",
+  "path": "/orders",
+  "auth": { "type": "bearer", "from": "login.token" },
+  "query": {
+    "status": { "static": "pending" },
+    "userId": { "from": "createUser.id" }
+  }
+}
+```
+
+Produces: `GET /orders?status=pending&userId=abc-123`
+
+`query` can be combined with `pathParams` and `defaults` on the same step.
+
+### Per-invocation overrides for `pathParams` and `query`
+
+Workflow invocations can override `pathParams` and `query` on a per-call basis, independent of the step definition's defaults. Override values are merged over the step-level values (invocation wins for matching keys).
+
+```json
+{
+  "steps": [
+    { "step": "createOrder", "captureAs": "firstOrder" },
+    { "step": "createOrder", "captureAs": "secondOrder" },
+    { "step": "getOrder", "pathParams": { "orderId": { "from": "firstOrder.id" } }, "captureAs": "retrieved" }
+  ],
+  "assertions": [
+    { "equal":    ["retrieved.id", "firstOrder.id"] },
+    { "notEqual": ["retrieved.id", "secondOrder.id"] }
+  ]
+}
+```
+
+```json
+{
+  "steps": [
+    { "step": "getUsers", "captureAs": "regularUsers" },
+    { "step": "getUsers", "query": { "role": { "static": "admin" } }, "captureAs": "admins" }
+  ]
+}
+```
+
+`with` (body field overrides), `pathParams`, and `query` are all independent and can be combined on the same invocation.
 
 ### Assertion types
 

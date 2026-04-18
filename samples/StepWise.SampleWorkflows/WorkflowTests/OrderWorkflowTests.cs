@@ -58,3 +58,41 @@ public class PlacedOrder_CanBeRetrieved : StepWiseTestBase
         Assert.Equal("pending", retrieved.Status);
     }
 }
+
+public class GetOrder_UsesPathParam : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        await ExecuteAsync(new LoginRequest());
+        await ExecuteAsync(new CreateUserRequest());
+        await BuildAsync(new AddOrderItem());
+        var first  = await ExecuteAsync(new CreateOrderRequest());
+        var second = await ExecuteAsync(new CreateOrderRequest());
+
+        // Explicitly retrieve the first order by id to verify path param routing
+        var retrieved = await ExecuteAsync(new GetOrderRequest(), pathParams: new() { ["orderId"] = first.Id });
+
+        Assert.Equal(first.Id, retrieved.Id);
+        Assert.NotEqual(second.Id, retrieved.Id);
+    }
+}
+
+public class GetUsersByRole_UsesQueryParam : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        await ExecuteAsync(new LoginRequest());
+        await ExecuteAsync(new CreateUserRequest() with { Role = Static("user") });
+        await ExecuteAsync(new CreateUserRequest() with { Role = Static("admin") });
+
+        // Uses step default: Query = { "role" = "user" }
+        var users  = await ExecuteAsync(new GetUsersByRoleRequest());
+        // Override per-call to get admins
+        var admins = await ExecuteAsync(new GetUsersByRoleRequest(), query: new() { ["role"] = "admin" });
+
+        Assert.All(users,  u => Assert.Equal("user",  u.Role));
+        Assert.All(admins, u => Assert.Equal("admin", u.Role));
+    }
+}

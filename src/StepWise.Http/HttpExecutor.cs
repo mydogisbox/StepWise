@@ -22,36 +22,39 @@ public static class HttpExecutor
         new(new HttpClientHandler { AllowAutoRedirect = false });
 
     /// <summary>
-    /// Executes an HTTP request given resolved fields, returning the raw response body.
+    /// Executes an HTTP request, returning the raw response body.
     /// </summary>
+    /// <param name="baseUrl">Target base URL.</param>
+    /// <param name="method">HTTP method.</param>
+    /// <param name="path">Path template; <c>{placeholder}</c> segments are substituted from <paramref name="pathParams"/>.</param>
+    /// <param name="pathParams">Values substituted into <c>{placeholder}</c> segments of <paramref name="path"/>. Never sent in the body.</param>
+    /// <param name="queryParams">Key-value pairs appended to the URL as a query string.</param>
+    /// <param name="bodyFields">Fields serialized as the JSON request body (ignored for GET and DELETE).</param>
+    /// <param name="applyAuth">Delegate that applies authentication headers to the request.</param>
     public static async Task<string> SendAsync(
         string baseUrl,
         HttpMethod method,
         string path,
-        Dictionary<string, object?> resolvedFields,
+        Dictionary<string, object?> pathParams,
+        Dictionary<string, object?> queryParams,
+        Dictionary<string, object?> bodyFields,
         Func<HttpRequestMessage, Task> applyAuth)
     {
         // Substitute path parameters
-        var pathParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in resolvedFields)
+        foreach (var (key, value) in pathParams)
+            path = path.Replace($"{{{key}}}", Uri.EscapeDataString(value?.ToString() ?? ""),
+                StringComparison.OrdinalIgnoreCase);
+
+        // Append query string
+        if (queryParams.Count > 0)
         {
-            var placeholder = $"{{{key}}}";
-            if (path.Contains(placeholder, StringComparison.OrdinalIgnoreCase))
-            {
-                path = path.Replace(placeholder,
-                    Uri.EscapeDataString(value?.ToString() ?? ""),
-                    StringComparison.OrdinalIgnoreCase);
-                pathParamNames.Add(key);
-            }
+            var qs = string.Join("&", queryParams.Select(kv =>
+                $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value?.ToString() ?? "")}"));
+            path = path.TrimEnd('?', '&') + (path.Contains('?') ? "&" : "?") + qs;
         }
 
         var url = baseUrl.TrimEnd('/') + "/" + path.TrimStart('/');
         var httpRequest = new HttpRequestMessage(method, url);
-
-        // Build body excluding path params
-        var bodyFields = resolvedFields
-            .Where(kv => !pathParamNames.Contains(kv.Key))
-            .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         if (method != HttpMethod.Get && method != HttpMethod.Delete && bodyFields.Count > 0)
         {

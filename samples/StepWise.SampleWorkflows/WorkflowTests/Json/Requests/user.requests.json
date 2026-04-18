@@ -4,15 +4,20 @@
       "target": "sample-api",
       "method": "GET",
       "path": "/users",
-      "auth": { "type": "bearer", "from": "login.token" }
+      "auth": { "type": "bearer", "from": "login.token" },
+      "query": {
+        "role": { "static": "user" }
+      }
     },
     "updateUserAddress": {
       "target": "sample-api",
       "method": "PUT",
       "path": "/users/{userId}/address",
       "auth": { "type": "bearer", "from": "login.token" },
+      "pathParams": {
+        "userId": { "from": "createUser.id" }
+      },
       "defaults": {
-        "userId":  { "from": "createUser.id" },
         "contact": { "static": {
           "primary": { "static": {
             "address": { "static": {

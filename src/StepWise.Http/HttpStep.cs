@@ -5,7 +5,7 @@ namespace StepWise.Http;
 
 /// <summary>
 /// Declares the HTTP-specific details for executing a request.
-/// Subclasses define Method, Path, and optionally Auth.
+/// Subclasses define Method, Path, and optionally Auth and Query.
 /// HttpTarget discovers and instantiates these automatically.
 /// </summary>
 public abstract class HttpStep<TRequest, TResponse>
@@ -14,4 +14,11 @@ public abstract class HttpStep<TRequest, TResponse>
     public abstract HttpMethod Method { get; }
     public abstract string Path { get; }
     public virtual IAuthProvider Auth => NoAuth.Instance;
+
+    /// <summary>
+    /// Key-value pairs appended to the URL as a query string (<c>?key=value&amp;…</c>).
+    /// Defined alongside the path as part of the URL shape, not per-request data.
+    /// </summary>
+    public virtual IReadOnlyDictionary<string, IFieldValue<string>> Query { get; } =
+        new Dictionary<string, IFieldValue<string>>();
 }

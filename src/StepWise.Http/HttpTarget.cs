@@ -39,13 +39,19 @@ public class HttpTarget : ITarget
         where TRequest : WorkflowRequest<TResponse>
     {
         var step = ResolveStep<TRequest, TResponse>(typeof(TRequest));
-        var resolvedFields = FieldValueResolver.Resolve<TResponse>(request, context);
+        var pathParams  = FieldValueResolver.ResolveGroup(request.PathParams, context);
+        var queryParams = FieldValueResolver.ResolveGroup(step.Query, context);
+        foreach (var kv in FieldValueResolver.ResolveGroup(request.Query, context))
+            queryParams[kv.Key] = kv.Value;
+        var bodyFields  = FieldValueResolver.Resolve(request, context);
 
         var responseJson = await HttpExecutor.SendAsync(
             _baseUrl,
             step.Method,
             step.Path,
-            resolvedFields,
+            pathParams,
+            queryParams,
+            bodyFields,
             req => step.Auth.ApplyAsync(req, context));
 
         return HttpExecutor.Deserialize<TResponse>(responseJson);

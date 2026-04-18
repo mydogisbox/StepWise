@@ -27,6 +27,21 @@ public record StepDefinition
     public string Method { get; init; } = "POST";
     public string Path   { get; init; } = "";
     public AuthDefinition? Auth { get; init; }
+
+    /// <summary>
+    /// Values substituted into <c>{placeholder}</c> segments of <see cref="Path"/>.
+    /// Each key must match a placeholder name in the path template.
+    /// Path parameters are never sent in the request body.
+    /// </summary>
+    public Dictionary<string, FieldValueDefinition>? PathParams { get; init; }
+
+    /// <summary>
+    /// Key-value pairs appended to the URL as a query string (<c>?key=value&amp;…</c>).
+    /// Resolved independently of the request body.
+    /// </summary>
+    public Dictionary<string, FieldValueDefinition>? Query { get; init; }
+
+    /// <summary>Default field values sent in the request body.</summary>
     public Dictionary<string, FieldValueDefinition>? Defaults { get; init; }
 
     /// <summary>Required for build steps — names the collection that accumulated items are stored under.</summary>
@@ -85,7 +100,15 @@ public record StepInvocation
     /// </summary>
     public string? CaptureRequestAs { get; init; }
     public string? Workflow { get; init; }
+
+    /// <summary>Per-invocation body field overrides. Merged over the step definition's defaults.</summary>
     public Dictionary<string, FieldValueDefinition>? With { get; init; }
+
+    /// <summary>Per-invocation path parameter overrides. Merged over the step definition's pathParams.</summary>
+    public Dictionary<string, FieldValueDefinition>? PathParams { get; init; }
+
+    /// <summary>Per-invocation query parameter overrides. Merged over the step definition's query.</summary>
+    public Dictionary<string, FieldValueDefinition>? Query { get; init; }
 }
 
 /// <summary>

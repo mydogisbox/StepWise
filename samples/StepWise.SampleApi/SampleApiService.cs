@@ -44,7 +44,8 @@ public class SampleApiService
         return user;
     }
 
-    public List<UserResponse> GetUsers() => [.. _users.Values];
+    public List<UserResponse> GetUsers(string? role = null) =>
+        [.. _users.Values.Where(u => role is null || u.Role.Equals(role, StringComparison.OrdinalIgnoreCase))];
 
     public OrderResponse CreateOrder(CreateOrderRequest req)
     {

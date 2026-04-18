@@ -200,15 +200,17 @@ public class JsonWorkflowRunner
                 $"Target '{stepDef.Target}' not found. " +
                 $"Available: [{string.Join(", ", baseUrls.Keys)}]");
 
-        var resolvedFields = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
+        var pathParams  = ResolveFieldGroup(stepDef.PathParams, invocation.PathParams, captures);
+        var queryParams = ResolveFieldGroup(stepDef.Query, invocation.Query, captures);
+        var bodyFields  = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
         var method = new HttpMethod(stepDef.Method.ToUpper());
         var applyAuth = BuildAuthApplier(stepDef.Auth, captures);
 
         if (invocation.CaptureRequestAs is { } requestKey)
-            captures[requestKey] = resolvedFields;
+            captures[requestKey] = bodyFields;
 
         var responseJson = await HttpExecutor.SendAsync(
-            baseUrl, method, stepDef.Path, resolvedFields, applyAuth);
+            baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, applyAuth);
 
         using var doc = JsonDocument.Parse(responseJson);
         object? captured = doc.RootElement.ValueKind == JsonValueKind.Array
@@ -316,6 +318,22 @@ public class JsonWorkflowRunner
             }
         }
         return result;
+    }
+
+    private static Dictionary<string, object?> ResolveFieldGroup(
+        Dictionary<string, FieldValueDefinition>? defs,
+        Dictionary<string, FieldValueDefinition>? overrides,
+        Dictionary<string, object?> captures)
+    {
+        var merged = new Dictionary<string, FieldValueDefinition>(StringComparer.OrdinalIgnoreCase);
+        if (defs is not null)
+            foreach (var (k, v) in defs) merged[k] = v;
+        if (overrides is not null)
+            foreach (var (k, v) in overrides) merged[k] = v;
+        return merged.ToDictionary(
+            kv => kv.Key,
+            kv => JsonValueResolver.Resolve(kv.Value).Resolve(captures),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     // ── Auth ─────────────────────────────────────────────────────────────────

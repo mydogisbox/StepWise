@@ -58,4 +58,12 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task CreatedUser_AppearsInUserList() =>
         RunWorkflowAsync("WorkflowTests/Json/user-list.workflow.json");
+
+    [Fact]
+    public Task GetUsersByRole_QueryParamFilters() =>
+        RunWorkflowAsync("WorkflowTests/Json/get-users-by-role.workflow.json");
+
+    [Fact]
+    public Task GetOrder_PathParamOverride_RetrievesCorrectOrder() =>
+        RunWorkflowAsync("WorkflowTests/Json/retrieve-specific-order.workflow.json");
 }

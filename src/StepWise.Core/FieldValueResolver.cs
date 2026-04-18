@@ -14,17 +14,26 @@ public static class FieldValueResolver
     {
         nameof(WorkflowRequest<object>.StepName),
         nameof(WorkflowRequest<object>.TargetKey),
+        nameof(WorkflowRequest<object>.PathParams),
+        nameof(WorkflowRequest<object>.Query),
         "EqualityContract",
     };
 
     /// <summary>
-    /// Resolves all IFieldValue&lt;T&gt; properties on a WorkflowRequest.
+    /// Resolves all IFieldValue&lt;T&gt; body properties on a WorkflowRequest.
+    /// PathParams and Query are excluded — resolve them separately.
     /// </summary>
     public static Dictionary<string, object?> Resolve<TResponse>(
         WorkflowRequest<TResponse> request,
         WorkflowContext context)
         => ResolveProperties(request, context, ExcludedProperties,
             t => t == typeof(WorkflowRequest<TResponse>));
+
+    /// <summary>Resolves a flat dictionary of named string field values into plain values.</summary>
+    public static Dictionary<string, object?> ResolveGroup(
+        IReadOnlyDictionary<string, IFieldValue<string>> fields,
+        WorkflowContext context)
+        => fields.ToDictionary(kv => kv.Key, kv => (object?)kv.Value.Resolve(context));
 
     /// <summary>
     /// Resolves all IFieldValue&lt;T&gt; properties on a BuildableRequest.

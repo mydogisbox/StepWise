@@ -67,8 +67,8 @@ public static class AppFactory
             return Results.Created($"/users/{user.Id}", user);
         }).RequireAuthorization();
 
-        app.MapGet("/users", (SampleApiService svc) =>
-            Results.Ok(svc.GetUsers())
+        app.MapGet("/users", (SampleApiService svc, string? role) =>
+            Results.Ok(svc.GetUsers(role))
         ).RequireAuthorization();
 
         app.MapGet("/users/{id}", (SampleApiService svc, string id) =>

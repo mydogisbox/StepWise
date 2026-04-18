@@ -32,7 +32,10 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 
 public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder", "sample-api")
 {
-    public IFieldValue<string> OrderId { get; init; } = From(ctx => ctx.Get<OrderResponse>("createOrder").Id);
+    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
+    {
+        ["orderId"] = From(ctx => ctx.Get<OrderResponse>("createOrder").Id)
+    };
 }
 
 public class GetOrderStep : HttpStep<GetOrderRequest, OrderResponse>

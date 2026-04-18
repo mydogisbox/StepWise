@@ -1,6 +1,7 @@
 using System.Reflection;
 using StepWise.Core;
 using StepWise.Http;
+using static StepWise.Core.FieldValues;
 
 namespace StepWise.SampleWorkflows;
 
@@ -16,8 +17,23 @@ public abstract class StepWiseTestBase
             .WithTarget("sample-api", new HttpTarget(SampleApiUrl, Assembly.GetExecutingAssembly()));
     }
 
-    protected Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
-        => _context.ExecuteAsync(request);
+    protected Task<TResponse> ExecuteAsync<TResponse>(
+        WorkflowRequest<TResponse> request,
+        Dictionary<string, string>? query = null,
+        Dictionary<string, string>? pathParams = null)
+    {
+        if (query is not null)
+            request = request with
+            {
+                Query = query.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
+            };
+        if (pathParams is not null)
+            request = request with
+            {
+                PathParams = pathParams.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
+            };
+        return _context.ExecuteAsync(request);
+    }
 
     protected Task BuildAsync<TItem>(TItem item) where TItem : BuildableRequest
         => _context.BuildAsync(item);
