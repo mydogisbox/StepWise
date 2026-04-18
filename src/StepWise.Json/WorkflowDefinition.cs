@@ -75,6 +75,14 @@ public record StepInvocation
     public int TimeoutMs { get; init; } = 10000;
 
     public string? CaptureAs { get; init; }
+
+    /// <summary>
+    /// Stores the resolved request payload under this key in addition to capturing the response.
+    /// Useful when the server does not echo request fields back in the response and a downstream
+    /// step or assertion needs to reference them. The captured value is a
+    /// <see cref="System.Collections.Generic.Dictionary{TKey,TValue}">Dictionary&lt;string, object?&gt;</see>
+    /// containing all resolved field values sent in the request body.
+    /// </summary>
     public string? CaptureRequestAs { get; init; }
     public string? Workflow { get; init; }
     public Dictionary<string, FieldValueDefinition>? With { get; init; }
