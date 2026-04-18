@@ -210,13 +210,17 @@ public class JsonWorkflowRunner
         var responseJson = await HttpExecutor.SendAsync(
             baseUrl, method, stepDef.Path, resolvedFields, applyAuth);
 
-        var responseDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            responseJson, HttpExecutor.JsonOptions);
+        using var doc = JsonDocument.Parse(responseJson);
+        object? captured = doc.RootElement.ValueKind == JsonValueKind.Array
+            ? doc.RootElement.EnumerateArray()
+                .Select(e => JsonValueResolver.JsonElementToObject(e))
+                .ToList<object?>()
+            : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson, HttpExecutor.JsonOptions);
 
         var captureName = invocation.CaptureAs ?? stepName;
-        captures[captureName] = responseDict;
+        captures[captureName] = captured;
 
-        return new StepResult(captureName, responseDict);
+        return new StepResult(captureName, captured);
     }
 
     private static StepResult BuildItem(
@@ -440,52 +444,61 @@ public class JsonWorkflowRunner
         for (int i = 1; i < segments.Count; i++)
         {
             if (current is null) return null;
-            current = ResolveSegment(current, segments[i]);
+            current = ResolveSegment(current, segments[i], captures);
         }
 
         return current;
     }
 
-    // Splits a path like "step.items[0].name" into ["step", "items", "[0]", "name"]
+    // Splits a path like "step.items[?id=other.id].name" into ["step", "items", "[?id=other.id]", "name"].
+    // Dots inside bracket expressions are treated as part of the expression, not as separators.
     private static List<string> TokenizePath(string path)
     {
         var segments = new List<string>();
-        foreach (var dotPart in path.Split('.'))
+        var i = 0;
+        var current = new System.Text.StringBuilder();
+
+        while (i < path.Length)
         {
-            if (string.IsNullOrEmpty(dotPart)) continue;
-            var bracketIdx = dotPart.IndexOf('[');
-            if (bracketIdx < 0)
+            if (path[i] == '[')
             {
-                segments.Add(dotPart);
-                continue;
-            }
-            if (bracketIdx > 0)
-                segments.Add(dotPart[..bracketIdx]);
-            var remaining = dotPart[bracketIdx..];
-            while (remaining.Length > 0 && remaining[0] == '[')
-            {
-                var close = remaining.IndexOf(']');
+                if (current.Length > 0) { segments.Add(current.ToString()); current.Clear(); }
+                var close = path.IndexOf(']', i);
                 if (close < 0) break;
-                segments.Add(remaining[..(close + 1)]);
-                remaining = remaining[(close + 1)..];
+                segments.Add(path[i..(close + 1)]);
+                i = close + 1;
+            }
+            else if (path[i] == '.')
+            {
+                if (current.Length > 0) { segments.Add(current.ToString()); current.Clear(); }
+                i++;
+            }
+            else
+            {
+                current.Append(path[i++]);
             }
         }
+
+        if (current.Length > 0) segments.Add(current.ToString());
         return segments;
     }
 
-    private static object? ResolveSegment(object current, string segment)
+    private static object? ResolveSegment(object current, string segment, Dictionary<string, object?>? captures = null)
     {
-        // Bracket segment, e.g. "[0]" or "[field=value]"
+        // Bracket segment, e.g. "[0]" or "[?field=value]"
         if (segment.StartsWith('[') && segment.EndsWith(']'))
         {
             var inner = segment[1..^1];
             var eqIdx = inner.IndexOf('=');
 
-            // Field lookup: [?field=value]
+            // Field lookup: [?field=value] — value may be a capture path
             if (inner.StartsWith('?') && eqIdx > 1)
             {
                 var field = inner[1..eqIdx];
-                var value = inner[(eqIdx + 1)..];
+                var rawValue = inner[(eqIdx + 1)..];
+                var resolvedValue = captures is not null && (rawValue.Contains('.') || rawValue.Contains('['))
+                    ? ResolveCapturePath(rawValue, captures)?.ToString() ?? rawValue
+                    : rawValue;
                 var items = current switch
                 {
                     System.Collections.IEnumerable e and not string => e.Cast<object?>(),
@@ -493,7 +506,7 @@ public class JsonWorkflowRunner
                 };
                 return items?.FirstOrDefault(item =>
                     item is not null &&
-                    string.Equals(ResolveSegment(item, field)?.ToString(), value, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(ResolveSegment(item, field)?.ToString(), resolvedValue, StringComparison.OrdinalIgnoreCase));
             }
 
             // Numeric index: [0]

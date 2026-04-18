@@ -54,4 +54,8 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task CreateUser_WithNestedAddress() =>
         RunWorkflowAsync("WorkflowTests/Json/user-with-address.workflow.json");
+
+    [Fact]
+    public Task CreatedUser_AppearsInUserList() =>
+        RunWorkflowAsync("WorkflowTests/Json/user-list.workflow.json");
 }

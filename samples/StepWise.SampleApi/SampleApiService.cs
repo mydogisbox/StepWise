@@ -44,6 +44,8 @@ public class SampleApiService
         return user;
     }
 
+    public List<UserResponse> GetUsers() => [.. _users.Values];
+
     public OrderResponse CreateOrder(CreateOrderRequest req)
     {
         if (!_users.ContainsKey(req.UserId))

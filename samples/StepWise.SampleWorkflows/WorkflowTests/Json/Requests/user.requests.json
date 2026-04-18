@@ -1,5 +1,11 @@
 {
   "steps": {
+    "getUsers": {
+      "target": "sample-api",
+      "method": "GET",
+      "path": "/users",
+      "auth": { "type": "bearer", "from": "login.token" }
+    },
     "updateUserAddress": {
       "target": "sample-api",
       "method": "PUT",

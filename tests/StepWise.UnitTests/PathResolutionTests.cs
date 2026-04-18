@@ -103,6 +103,24 @@ public class FromValuePathResolutionTests
     }
 
     [Fact]
+    public void FieldLookup_DynamicValue_ResolvesFromCaptures()
+    {
+        var captures = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["getOrders"] = new Dictionary<string, JsonElement>
+            {
+                ["orders"] = JsonSerializer.Deserialize<JsonElement>(
+                    """[{"id":"a","status":"pending"},{"id":"b","status":"shipped"}]""")
+            },
+            ["target"] = new Dictionary<string, JsonElement>
+            {
+                ["id"] = JsonSerializer.Deserialize<JsonElement>("""{"id":"b"}""").GetProperty("id")
+            }
+        };
+        Assert.Equal("shipped", new FromJsonValue("getOrders.orders[?id=target.id].status").Resolve(captures));
+    }
+
+    [Fact]
     public void FieldLookup_ReturnsFirstMatch_WhenMultipleMatch()
     {
         var captures = ApiCaptures("getData", """{"items":[{"type":"widget","name":"First"},{"type":"widget","name":"Second"}]}""");

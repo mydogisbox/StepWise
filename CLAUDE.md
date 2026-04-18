@@ -242,6 +242,10 @@ This means a workflow only needs to specify the properties that differ:
 
 `street` and `country` are not specified in `with`, so they come from the step defaults.
 
+### Limitations
+
+- **Array merge** — deep merge only applies to objects. If both default and override resolve to an array, the override replaces the default entirely. To vary array contents across invocations, use `build` steps and reference the accumulation via `from`.
+
 ### Auth types
 
 ```json
@@ -382,6 +386,7 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 - Supports arbitrary nesting: `step.a.b.c`
 - Supports numeric index: `step.items[0]`
 - Supports field lookup: `step.items[?id=abc-123]` — finds the first element where `id` equals `abc-123` (case-insensitive)
+- Supports dynamic field lookup values: `step.items[?id=other.id]` — the lookup value is resolved as a capture path when it contains `.` or `[`
 - Supports combinations: `step.items[?productName=Widget B].quantity`
 
 Assertion expressions containing `.` or `[` are resolved as paths. Bare strings with neither are treated as literals if not found as a capture key.
