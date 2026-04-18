@@ -54,7 +54,8 @@ samples/StepWise.SampleWorkflows/
         ├── targets.json
         ├── Requests/
         │   ├── auth.requests.json
-        │   └── order.requests.json
+        │   ├── order.requests.json
+        │   └── user.requests.json
         └── *.workflow.json
 ```
 
@@ -182,6 +183,64 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 { "generated": "guid" }        // built-in generators: guid, email, int, decimal
 { "from": "login.token" }      // capture path — see Path reference syntax below
 ```
+
+When `static` contains a JSON object, each property value is resolved recursively as a `FieldValueDefinition`. An object with a `static`, `from`, or `generated` key is treated as a field value definition; all other objects are structural nodes whose children are resolved the same way. This allows `from` and `generated` at any depth:
+
+```json
+"contact": { "static": {
+  "primary": { "static": {
+    "address": { "static": {
+      "street": { "static": "123 Main St" },
+      "city":   { "from": "user.city" }
+    }}
+  }}
+}}
+```
+
+### Nested object defaults and partial overrides
+
+Step definitions should include full default values for all fields, including nested objects. When a `with` block specifies a nested object, it is **deep-merged** with the default: override wins for matching keys at every level, and unspecified keys are filled from the default.
+
+This means a workflow only needs to specify the properties that differ:
+
+```json
+// requests file — full defaults
+"updateUserAddress": {
+  "defaults": {
+    "contact": { "static": {
+      "primary": { "static": {
+        "address": { "static": {
+          "street":  { "static": "123 Main St" },
+          "city":    { "static": "Springfield" },
+          "region":  { "static": {
+            "state":   { "static": "IL" },
+            "country": { "static": "US" }
+          }}
+        }}
+      }}
+    }}
+  }
+}
+
+// workflow file — override only what matters
+{
+  "step": "updateUserAddress",
+  "with": {
+    "contact": { "static": {
+      "primary": { "static": {
+        "address": { "static": {
+          "city":   { "static": "Boston" },
+          "region": { "static": {
+            "state": { "static": "MA" }
+          }}
+        }}
+      }}
+    }}
+  }
+}
+```
+
+`street` and `country` are not specified in `with`, so they come from the step defaults.
 
 ### Auth types
 

@@ -8,7 +8,8 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     protected override IReadOnlyList<string> RequestPaths =>
     [
         "Requests/auth.requests.json",
-        "Requests/order.requests.json"
+        "Requests/order.requests.json",
+        "Requests/user.requests.json"
     ];
 
     protected override string TargetsPath => "WorkflowTests/Json/targets.json";
@@ -49,4 +50,8 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task NestedWorkflow_StepsAndCapturesFlowIntoParent() =>
         RunWorkflowAsync("WorkflowTests/Json/nested-workflow.workflow.json");
+
+    [Fact]
+    public Task CreateUser_WithNestedAddress() =>
+        RunWorkflowAsync("WorkflowTests/Json/user-with-address.workflow.json");
 }

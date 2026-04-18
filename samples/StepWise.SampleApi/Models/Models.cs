@@ -11,3 +11,10 @@ public record OrderItemResponse(string ProductName, int Quantity, decimal UnitPr
 public record CreateOrderRequest(string UserId, List<OrderItemRequest> Items);
 public record OrderResponse(string Id, string UserId, List<OrderItemResponse> Items, string Status);
 
+public record RegionInfo(string State, string Country);
+public record AddressInfo(string Street, string City, RegionInfo Region);
+public record PrimaryContact(AddressInfo Address);
+public record ContactInfo(PrimaryContact Primary);
+public record UpdateUserAddressRequest(ContactInfo Contact);
+public record UpdateUserAddressResponse(string UserId, ContactInfo Contact);
+

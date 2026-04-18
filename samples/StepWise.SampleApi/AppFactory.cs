@@ -89,6 +89,12 @@ public static class AppFactory
             catch (KeyNotFoundException) { return Results.NotFound(new { error = $"Order '{id}' not found." }); }
         }).RequireAuthorization();
 
+        app.MapPut("/users/{userId}/address", (SampleApiService svc, string userId, [FromBody] UpdateUserAddressRequest req) =>
+        {
+            try { return Results.Ok(svc.UpdateUserAddress(userId, req)); }
+            catch (KeyNotFoundException) { return Results.NotFound(new { error = $"User '{userId}' not found." }); }
+        }).RequireAuthorization();
+
         app.MapGet("/health", () => Results.Ok());
 
         return app;

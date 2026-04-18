@@ -286,6 +286,171 @@ public class AssertionPathTests
     }
 }
 
+public class NestedStaticResolutionTests
+{
+    private static FieldValueDefinition StaticField(object value) =>
+        new() { Static = JsonSerializer.SerializeToElement(value) };
+
+    [Fact]
+    public async Task Static_ObjectWithNestedFieldValueDefs_ResolvesRecursively()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new()
+                {
+                    ["address"] = StaticField(new Dictionary<string, object>
+                    {
+                        ["city"]  = new Dictionary<string, string> { ["static"] = "Boston" },
+                        ["state"] = new Dictionary<string, string> { ["static"] = "MA" }
+                    })
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Build = "addItem" }],
+            [
+                new AssertionDefinition { Equal = ["addItem.address.city",  "Boston"] },
+                new AssertionDefinition { Equal = ["addItem.address.state", "MA"] }
+            ]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task Static_DeeplyNestedObjects_ResolveAllLevels()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new()
+                {
+                    ["contact"] = StaticField(new Dictionary<string, object>
+                    {
+                        ["primary"] = new Dictionary<string, object>
+                        {
+                            ["static"] = new Dictionary<string, object>
+                            {
+                                ["address"] = new Dictionary<string, object>
+                                {
+                                    ["static"] = new Dictionary<string, object>
+                                    {
+                                        ["city"]   = new Dictionary<string, string> { ["static"] = "Boston" },
+                                        ["region"] = new Dictionary<string, object>
+                                        {
+                                            ["static"] = new Dictionary<string, object>
+                                            {
+                                                ["state"] = new Dictionary<string, string> { ["static"] = "MA" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    })
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation { Build = "addItem" }],
+            [
+                new AssertionDefinition { Equal = ["addItem.contact.primary.address.city",         "Boston"] },
+                new AssertionDefinition { Equal = ["addItem.contact.primary.address.region.state", "MA"] }
+            ]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task Static_NestedWith_DeepMergesWithDefaults()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new()
+                {
+                    ["address"] = StaticField(new Dictionary<string, object>
+                    {
+                        ["street"] = new Dictionary<string, string> { ["static"] = "123 Main St" },
+                        ["city"]   = new Dictionary<string, string> { ["static"] = "Springfield" },
+                        ["state"]  = new Dictionary<string, string> { ["static"] = "IL" }
+                    })
+                }
+            }
+        };
+
+        // Override only "city"; "street" and "state" should come from defaults.
+        var workflow = new WorkflowDefinition(
+            "test",
+            [new StepInvocation
+            {
+                Build = "addItem",
+                With = new()
+                {
+                    ["address"] = StaticField(new Dictionary<string, object>
+                    {
+                        ["city"] = new Dictionary<string, string> { ["static"] = "Boston" }
+                    })
+                }
+            }],
+            [
+                new AssertionDefinition { Equal = ["addItem.address.city",   "Boston"] },
+                new AssertionDefinition { Equal = ["addItem.address.state",  "IL"] },
+                new AssertionDefinition { NotEmpty = "addItem.address.street" }
+            ]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task Static_NestedFrom_ResolvesAgainstCaptures()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["setSource"] = new()
+            {
+                AccumulateAs = "sources",
+                Defaults = new() { ["value"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("dynamic-value") } }
+            },
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new()
+                {
+                    ["wrapper"] = StaticField(new Dictionary<string, object>
+                    {
+                        ["inner"] = new Dictionary<string, string> { ["from"] = "setSource.value" }
+                    })
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition(
+            "test",
+            [
+                new StepInvocation { Build = "setSource" },
+                new StepInvocation { Build = "addItem" }
+            ],
+            [new AssertionDefinition { Equal = ["addItem.wrapper.inner", "dynamic-value"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+}
+
 public class CountAssertionTests
 {
     private static FieldValueDefinition StaticField(object value) =>

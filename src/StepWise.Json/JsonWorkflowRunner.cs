@@ -280,16 +280,38 @@ public class JsonWorkflowRunner
         Dictionary<string, FieldValueDefinition>? overrides,
         Dictionary<string, object?> captures)
     {
-        var merged = new Dictionary<string, FieldValueDefinition>(StringComparer.OrdinalIgnoreCase);
-        if (defaults is not null)
-            foreach (var (k, v) in defaults) merged[k] = v;
-        if (overrides is not null)
-            foreach (var (k, v) in overrides) merged[k] = v;
-
-        return merged.ToDictionary(
+        var resolvedDefaults = (defaults ?? []).ToDictionary(
             kv => kv.Key,
             kv => JsonValueResolver.Resolve(kv.Value).Resolve(captures),
             StringComparer.OrdinalIgnoreCase);
+
+        var resolvedOverrides = (overrides ?? []).ToDictionary(
+            kv => kv.Key,
+            kv => JsonValueResolver.Resolve(kv.Value).Resolve(captures),
+            StringComparer.OrdinalIgnoreCase);
+
+        return DeepMerge(resolvedDefaults, resolvedOverrides);
+    }
+
+    private static Dictionary<string, object?> DeepMerge(
+        Dictionary<string, object?> defaults,
+        Dictionary<string, object?> overrides)
+    {
+        var result = new Dictionary<string, object?>(defaults, StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, overrideVal) in overrides)
+        {
+            if (result.TryGetValue(key, out var defaultVal) &&
+                defaultVal is Dictionary<string, object?> defaultDict &&
+                overrideVal is Dictionary<string, object?> overrideDict)
+            {
+                result[key] = DeepMerge(defaultDict, overrideDict);
+            }
+            else
+            {
+                result[key] = overrideVal;
+            }
+        }
+        return result;
     }
 
     // ── Auth ─────────────────────────────────────────────────────────────────

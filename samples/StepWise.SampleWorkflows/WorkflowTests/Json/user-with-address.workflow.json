@@ -1,0 +1,26 @@
+{
+  "name": "CreateUser_WithNestedAddress",
+  "steps": [
+    { "workflow": "SetupUser" },
+    {
+      "step": "updateUserAddress",
+      "with": {
+        "contact": { "static": {
+          "primary": { "static": {
+            "address": { "static": {
+              "city":   { "static": "Boston" },
+              "region": { "static": {
+                "state": { "static": "MA" }
+              }}
+            }}
+          }}
+        }}
+      }
+    }
+  ],
+  "assertions": [
+    { "equal":    ["updateUserAddress.contact.primary.address.city",         "Boston"] },
+    { "equal":    ["updateUserAddress.contact.primary.address.region.state", "MA"] },
+    { "notEmpty": "updateUserAddress.contact.primary.address.street" }
+  ]
+}

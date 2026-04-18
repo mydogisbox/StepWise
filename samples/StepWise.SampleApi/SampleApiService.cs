@@ -65,4 +65,11 @@ public class SampleApiService
             throw new KeyNotFoundException($"Order '{id}' not found.");
         return order;
     }
+
+    public UpdateUserAddressResponse UpdateUserAddress(string userId, UpdateUserAddressRequest req)
+    {
+        if (!_users.ContainsKey(userId))
+            throw new KeyNotFoundException($"User '{userId}' not found.");
+        return new UpdateUserAddressResponse(userId, req.Contact);
+    }
 }

@@ -1,0 +1,25 @@
+{
+  "steps": {
+    "updateUserAddress": {
+      "target": "sample-api",
+      "method": "PUT",
+      "path": "/users/{userId}/address",
+      "auth": { "type": "bearer", "from": "login.token" },
+      "defaults": {
+        "userId":  { "from": "createUser.id" },
+        "contact": { "static": {
+          "primary": { "static": {
+            "address": { "static": {
+              "street":  { "static": "123 Main St" },
+              "city":    { "static": "Springfield" },
+              "region":  { "static": {
+                "state":   { "static": "IL" },
+                "country": { "static": "US" }
+              }}
+            }}
+          }}
+        }}
+      }
+    }
+  }
+}

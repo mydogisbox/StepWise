@@ -9,6 +9,11 @@ namespace StepWise.Json;
 /// </summary>
 public static class JsonValueResolver
 {
+    private static readonly JsonSerializerOptions DeserializeOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private static readonly Dictionary<string, Func<object?>> Generators = new()
     {
         ["guid"]    = () => Guid.NewGuid().ToString(),
@@ -20,7 +25,12 @@ public static class JsonValueResolver
     public static IJsonFieldValue Resolve(FieldValueDefinition def)
     {
         if (def.Static.HasValue)
-            return new StaticJsonValue(JsonElementToObject(def.Static.Value));
+        {
+            var el = def.Static.Value;
+            return el.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+                ? new NestedStaticJsonValue(el)
+                : new StaticJsonValue(JsonElementToObject(el));
+        }
 
         if (def.Generated is not null)
         {
@@ -51,6 +61,32 @@ public static class JsonValueResolver
                                     .ToDictionary(p => p.Name, p => JsonElementToObject(p.Value)),
         _                     => null
     };
+
+    /// <summary>
+    /// Resolves a JsonElement, treating any JSON object that has a "static", "from", or
+    /// "generated" key as a FieldValueDefinition to resolve. All other objects are treated
+    /// as structural nodes whose children are resolved recursively.
+    /// </summary>
+    internal static object? ResolveElement(JsonElement element, Dictionary<string, object?> captures)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("static", out _) ||
+                element.TryGetProperty("from",   out _) ||
+                element.TryGetProperty("generated", out _))
+            {
+                var def = JsonSerializer.Deserialize<FieldValueDefinition>(element, DeserializeOptions)!;
+                return Resolve(def).Resolve(captures);
+            }
+            return element.EnumerateObject()
+                .ToDictionary(p => p.Name, p => ResolveElement(p.Value, captures));
+        }
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.EnumerateArray()
+                .Select(e => (object?)ResolveElement(e, captures))
+                .ToList();
+        return JsonElementToObject(element);
+    }
 }
 
 /// <summary>
@@ -65,6 +101,16 @@ public interface IJsonFieldValue
 public sealed class StaticJsonValue(object? value) : IJsonFieldValue
 {
     public object? Resolve(Dictionary<string, object?> _) => value;
+}
+
+/// <summary>
+/// A static value whose children are JSON objects and may themselves be FieldValueDefinitions.
+/// Resolved lazily so that nested "from" references can be evaluated against current captures.
+/// </summary>
+public sealed class NestedStaticJsonValue(System.Text.Json.JsonElement element) : IJsonFieldValue
+{
+    public object? Resolve(Dictionary<string, object?> captures) =>
+        JsonValueResolver.ResolveElement(element, captures);
 }
 
 public sealed class GeneratedJsonValue(Func<object?> generator) : IJsonFieldValue
