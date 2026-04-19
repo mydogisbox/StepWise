@@ -1,0 +1,7 @@
+{
+  "name": "From_Throws_WhenRootPresentButFieldAbsent",
+  "steps": [
+    { "build": "setSource", "with": { "id": { "static": "resolved-value" } } },
+    { "build": "addItem",   "with": { "ownerId": { "from": "setSource.nonexistent", "default": { "static": "fallback-value" } } } }
+  ]
+}

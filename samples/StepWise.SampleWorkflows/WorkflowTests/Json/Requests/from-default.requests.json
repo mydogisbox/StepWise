@@ -1,0 +1,10 @@
+{
+  "steps": {
+    "setSource": {
+      "accumulateAs": "sources"
+    },
+    "addItem": {
+      "accumulateAs": "items"
+    }
+  }
+}

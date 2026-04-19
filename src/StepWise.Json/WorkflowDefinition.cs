@@ -124,6 +124,13 @@ public record FieldValueDefinition
 
     [JsonPropertyName("from")]
     public string? From { get; init; }
+
+    /// <summary>
+    /// Fallback value used when <see cref="From"/> resolves to null (capture missing or field absent).
+    /// Supports any field value type: <c>{ "static": "…" }</c>, <c>{ "generated": "…" }</c>, or <c>{ "from": "…" }</c>.
+    /// </summary>
+    [JsonPropertyName("default")]
+    public FieldValueDefinition? Default { get; init; }
 }
 
 /// <summary>

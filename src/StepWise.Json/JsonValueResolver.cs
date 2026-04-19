@@ -41,7 +41,10 @@ public static class JsonValueResolver
         }
 
         if (def.From is not null)
-            return new FromJsonValue(def.From);
+        {
+            var fallback = def.Default is not null ? Resolve(def.Default) : null;
+            return new FromJsonValue(def.From, fallback);
+        }
 
         throw new JsonWorkflowException(
             "A field value definition must have exactly one of: 'static', 'generated', or 'from'.");
@@ -73,7 +76,8 @@ public static class JsonValueResolver
         {
             if (element.TryGetProperty("static", out _) ||
                 element.TryGetProperty("from",   out _) ||
-                element.TryGetProperty("generated", out _))
+                element.TryGetProperty("generated", out _) ||
+                element.TryGetProperty("default", out _))
             {
                 var def = JsonSerializer.Deserialize<FieldValueDefinition>(element, DeserializeOptions)!;
                 return Resolve(def).Resolve(captures);
@@ -118,8 +122,37 @@ public sealed class GeneratedJsonValue(Func<object?> generator) : IJsonFieldValu
     public object? Resolve(Dictionary<string, object?> _) => generator();
 }
 
-public sealed class FromJsonValue(string path) : IJsonFieldValue
+public sealed class FromJsonValue(string path, IJsonFieldValue? fallback = null) : IJsonFieldValue
 {
-    public object? Resolve(Dictionary<string, object?> captures) =>
-        JsonWorkflowRunner.ResolveCapturePath(path, captures);
+    // Root key is everything before the first '.' or '['.
+    private static string RootKey(string p)
+    {
+        var d = p.IndexOf('.');
+        var b = p.IndexOf('[');
+        var end = (d, b) switch
+        {
+            (< 0, < 0) => p.Length,
+            (< 0, _)   => b,
+            (_, < 0)   => d,
+            _          => Math.Min(d, b)
+        };
+        return p[..end];
+    }
+
+    public object? Resolve(Dictionary<string, object?> captures)
+    {
+        // Use the default only when the root capture key is entirely absent —
+        // not when the root ran but a nested field is missing.
+        if (!captures.ContainsKey(RootKey(path)))
+            return fallback?.Resolve(captures);
+
+        var resolved = JsonWorkflowRunner.ResolveCapturePath(path, captures);
+
+        if (resolved is null && fallback is not null)
+            throw new JsonWorkflowException(
+                $"'{path}' could not be resolved: '{RootKey(path)}' was captured but the field is null or missing. " +
+                $"The default is only applied when the step has not run.");
+
+        return resolved;
+    }
 }

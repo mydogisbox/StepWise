@@ -65,8 +65,9 @@ public class JsonWorkflowRunner
         return merged;
     }
 
-    public static Dictionary<string, string> LoadTargets(string targetsPath)
+    public static Dictionary<string, string> LoadTargets(string? targetsPath)
     {
+        if (targetsPath is null) return [];
         var json = File.ReadAllText(targetsPath);
         return JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions)
             ?? throw new JsonWorkflowException($"Failed to deserialize targets from '{targetsPath}'.");

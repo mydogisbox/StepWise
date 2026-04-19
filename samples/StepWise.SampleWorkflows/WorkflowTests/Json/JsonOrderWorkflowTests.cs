@@ -67,3 +67,25 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     public Task GetOrder_PathParamOverride_RetrievesCorrectOrder() =>
         RunWorkflowAsync("WorkflowTests/Json/retrieve-specific-order.workflow.json");
 }
+
+public class JsonFromDefaultTests : JsonWorkflowTestBase
+{
+    protected override IReadOnlyList<string> RequestPaths =>
+    [
+        "Requests/from-default.requests.json"
+    ];
+
+
+    [Fact]
+    public Task From_UsesDefault_WhenCaptureNotPresent() =>
+        RunWorkflowAsync("WorkflowTests/Json/from-default-absent.workflow.json");
+
+    [Fact]
+    public Task From_ResolvesValue_WhenCapturePresent() =>
+        RunWorkflowAsync("WorkflowTests/Json/from-default-present.workflow.json");
+
+    [Fact]
+    public Task From_Throws_WhenRootPresentButFieldAbsent() =>
+        Assert.ThrowsAsync<JsonWorkflowException>(() =>
+            RunWorkflowAsync("WorkflowTests/Json/from-default-nested-absent.workflow.json"));
+}

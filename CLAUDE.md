@@ -275,6 +275,16 @@ Workflow invocations can override `pathParams` and `query` on a per-call basis, 
 { "from": "login.token" }      // capture path — see Path reference syntax below
 ```
 
+`from` accepts an optional `default` that is used when the referenced step has not run:
+
+```json
+{ "from": "createUser.id", "default": { "static": "guest" } }
+```
+
+- If `createUser` was never executed, the default resolves and is used.
+- If `createUser` ran but `id` is missing or null, a `JsonWorkflowException` is thrown — the step ran, so a missing field is a bug, not an absent step.
+- The `default` is itself a field value definition and supports `static`, `generated`, or `from`.
+
 When `static` contains a JSON object, each property value is resolved recursively as a `FieldValueDefinition`. An object with a `static`, `from`, or `generated` key is treated as a field value definition; all other objects are structural nodes whose children are resolved the same way. This allows `from` and `generated` at any depth:
 
 ```json

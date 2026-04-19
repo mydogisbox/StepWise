@@ -1,4 +1,6 @@
+using System.Text.Json;
 using StepWise.Core;
+using StepWise.Json;
 using static StepWise.Core.FieldValues;
 using Xunit;
 
@@ -93,5 +95,77 @@ public class FieldValueResolverTests
 
         Assert.Equal("Bob", resolved["Name"]);
         Assert.Equal(42, resolved["Count"]);
+    }
+}
+
+public class FromDefaultTests
+{
+    private static FieldValueDefinition StaticField(object value) =>
+        new() { Static = JsonSerializer.SerializeToElement(value) };
+
+    private static Dictionary<string, StepDefinition> StepDefs => new()
+    {
+        ["setUser"] = new() { AccumulateAs = "users", Defaults = new() { ["id"] = StaticField("user-123") } },
+        ["addItem"] = new()
+        {
+            AccumulateAs = "items",
+            Defaults = new()
+            {
+                ["ownerId"] = new FieldValueDefinition { From = "setUser.id", Default = StaticField("guest") }
+            }
+        }
+    };
+
+    [Fact]
+    public async Task From_UsesDefault_WhenCaptureNotPresent()
+    {
+        var workflow = new WorkflowDefinition("test",
+            [new StepInvocation { Build = "addItem" }],
+            [new AssertionDefinition { Equal = ["addItem.ownerId", "guest"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, StepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task From_ResolvesValue_WhenCapturePresent()
+    {
+        var workflow = new WorkflowDefinition("test",
+            [
+                new StepInvocation { Build = "setUser" },
+                new StepInvocation { Build = "addItem" }
+            ],
+            [new AssertionDefinition { Equal = ["addItem.ownerId", "user-123"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, StepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    [Fact]
+    public async Task From_Throws_WhenRootPresentButFieldAbsent()
+    {
+        // setUser ran but has no "nonexistent" field — this is a bug, not a missing step
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["setUser"] = new() { AccumulateAs = "users", Defaults = new() { ["id"] = StaticField("user-123") } },
+            ["addItem"] = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new()
+                {
+                    ["ownerId"] = new FieldValueDefinition { From = "setUser.nonexistent", Default = StaticField("guest") }
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition("test",
+            [
+                new StepInvocation { Build = "setUser" },
+                new StepInvocation { Build = "addItem" }
+            ],
+            null);
+
+        await Assert.ThrowsAsync<JsonWorkflowException>(() =>
+            JsonWorkflowRunner.RunAsync(workflow, stepDefs, []));
     }
 }

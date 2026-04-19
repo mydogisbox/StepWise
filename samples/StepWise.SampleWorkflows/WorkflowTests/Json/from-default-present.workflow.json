@@ -1,0 +1,10 @@
+{
+  "name": "From_ResolvesValue_WhenCapturePresent",
+  "steps": [
+    { "build": "setSource", "with": { "id": { "static": "resolved-value" } } },
+    { "build": "addItem",   "with": { "ownerId": { "from": "setSource.id", "default": { "static": "fallback-value" } } } }
+  ],
+  "assertions": [
+    { "equal": ["addItem.ownerId", "resolved-value"] }
+  ]
+}
