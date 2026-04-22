@@ -158,7 +158,7 @@ Assert.Equal("Deluxe Widget", widget.ProductName);  // TResponse — plain value
 Assert.Equal(3, widget.Quantity);
 ```
 
-`IFieldValue<T>` properties are **not** resolved recursively into nested records. `FieldValueResolver` resolves one level: `IFieldValue<T>` → `T`. If `T` is itself a record with `IFieldValue<U>` properties, those inner values are not resolved. Nested field values should use plain C# values, not `IFieldValue`-bearing records.
+`IFieldValue<T>` properties are resolved recursively. After resolving `IFieldValue<T>` → `T`, if `T` is a record with `IFieldValue<U>` properties, those are resolved too, producing a nested `Dictionary<string, object?>`. This applies to arbitrary depth. List elements are also recursed into.
 
 ---
 

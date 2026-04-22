@@ -74,7 +74,7 @@ public static class FieldValueResolver
             if (fieldValueInterface is not null)
             {
                 var resolveMethod = fieldValueInterface.GetMethod(nameof(IFieldValue<object>.Resolve))!;
-                result[property.Name] = resolveMethod.Invoke(value, [context]);
+                result[property.Name] = ResolveRecursively(resolveMethod.Invoke(value, [context]), context);
             }
             else
             {
@@ -83,6 +83,30 @@ public static class FieldValueResolver
         }
 
         return result;
+    }
+
+    private static object? ResolveRecursively(object? value, WorkflowContext context)
+    {
+        if (value is null) return null;
+
+        var type = value.GetType();
+
+        if (type.IsPrimitive || value is string || value is decimal || type.IsEnum)
+            return value;
+
+        if (value is System.Collections.IList list)
+        {
+            var result = new List<object?>(list.Count);
+            foreach (var item in list)
+                result.Add(ResolveRecursively(item, context));
+            return result;
+        }
+
+        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        if (properties.Any(p => GetFieldValueInterface(p.PropertyType) is not null))
+            return ResolveProperties(value, context, new HashSet<string> { "EqualityContract" }, _ => false);
+
+        return value;
     }
 
     private static Type? GetFieldValueInterface(Type type)

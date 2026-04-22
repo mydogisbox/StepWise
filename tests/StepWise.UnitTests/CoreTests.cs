@@ -99,6 +99,67 @@ public class FieldValueResolverTests
     }
 }
 
+public class RecursiveFieldValueTests
+{
+    private record Inner
+    {
+        public IFieldValue<string> Value { get; init; } = Static("default");
+    }
+
+    private record Outer() : WorkflowRequest<object>("test", "test-api")
+    {
+        public IFieldValue<Inner> Nested { get; init; } = Static(new Inner());
+    }
+
+    private record DeepInner
+    {
+        public IFieldValue<string> Leaf { get; init; } = Static("deep");
+    }
+
+    private record MiddleLayer
+    {
+        public IFieldValue<DeepInner> Inner { get; init; } = Static(new DeepInner());
+    }
+
+    private record DeepOuter() : WorkflowRequest<object>("test", "test-api")
+    {
+        public IFieldValue<MiddleLayer> Middle { get; init; } = Static(new MiddleLayer());
+    }
+
+    [Fact]
+    public void NestedRecord_FieldValuesResolvedRecursively()
+    {
+        var context = new WorkflowContext();
+        var resolved = FieldValueResolver.Resolve<object>(new Outer(), context);
+
+        var nested = Assert.IsType<Dictionary<string, object?>>(resolved["Nested"]);
+        Assert.Equal("default", nested["Value"]);
+    }
+
+    [Fact]
+    public void NestedRecord_WithOverride_ResolvesCorrectly()
+    {
+        var context = new WorkflowContext();
+        var resolved = FieldValueResolver.Resolve<object>(
+            new Outer() with { Nested = Static(new Inner() with { Value = Static("overridden") }) },
+            context);
+
+        var nested = Assert.IsType<Dictionary<string, object?>>(resolved["Nested"]);
+        Assert.Equal("overridden", nested["Value"]);
+    }
+
+    [Fact]
+    public void DeeplyNestedRecord_AllLevelsResolved()
+    {
+        var context = new WorkflowContext();
+        var resolved = FieldValueResolver.Resolve<object>(new DeepOuter(), context);
+
+        var middle = Assert.IsType<Dictionary<string, object?>>(resolved["Middle"]);
+        var inner  = Assert.IsType<Dictionary<string, object?>>(middle["Inner"]);
+        Assert.Equal("deep", inner["Leaf"]);
+    }
+}
+
 public class FromDefaultTests
 {
     private static FieldValueDefinition StaticField(object value) =>
@@ -222,12 +283,14 @@ public class BuildableRequestAccumulationTests
 
         var resolved = FieldValueResolver.Resolve(new OrderRequest(), context);
 
-        var items = Assert.IsType<List<Dictionary<string, object?>>>(resolved["Items"]);
+        var items = Assert.IsType<List<object?>>(resolved["Items"]);
         Assert.Equal(2, items.Count);
-        Assert.Equal("Widget", items[0]["Name"]);
-        Assert.Equal(2, items[0]["Count"]);
-        Assert.Equal("Gadget", items[1]["Name"]);
-        Assert.Equal(5, items[1]["Count"]);
+        var first  = Assert.IsType<Dictionary<string, object?>>(items[0]);
+        var second = Assert.IsType<Dictionary<string, object?>>(items[1]);
+        Assert.Equal("Widget", first["Name"]);
+        Assert.Equal(2, first["Count"]);
+        Assert.Equal("Gadget", second["Name"]);
+        Assert.Equal(5, second["Count"]);
     }
 }
 

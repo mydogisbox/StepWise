@@ -120,6 +120,37 @@ public class InvocationHeaders_ReceivedByServer : StepWiseTestBase
     }
 }
 
+public class UpdateUserAddress_NestedFieldValuesResolvedRecursively : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        await ExecuteAsync(new LoginRequest());
+        await ExecuteAsync(new CreateUserRequest());
+
+        var result = await ExecuteAsync(
+            new UpdateUserAddressRequest() with
+            {
+                Contact = Static(new ContactFields
+                {
+                    Primary = Static(new PrimaryFields
+                    {
+                        Address = Static(new AddressFields
+                        {
+                            City   = Static("Boston"),
+                            Region = Static(new RegionFields { State = Static("MA") })
+                        })
+                    })
+                })
+            });
+
+        Assert.Equal("Boston",      result.Contact.Primary.Address.City);
+        Assert.Equal("MA",          result.Contact.Primary.Address.Region.State);
+        Assert.Equal("123 Main St", result.Contact.Primary.Address.Street);   // default preserved
+        Assert.Equal("US",          result.Contact.Primary.Address.Region.Country); // default preserved
+    }
+}
+
 public class BuildItem_ReturnsResolvedResponse : StepWiseTestBase
 {
     [Fact]
