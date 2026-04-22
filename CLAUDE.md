@@ -17,7 +17,8 @@ Run tests after every change to verify nothing is broken.
 ```
 StepWise.Core
 ├── WorkflowRequest<TResponse>     — base record for all requests
-├── BuildableRequest               — base record for array item builders
+├── BuildableRequest               — non-generic marker base for array item builders
+├── BuildableRequest<TResponse>    — generic base; TResponse is the resolved snapshot type returned by BuildAsync
 ├── WorkflowContext                — holds targets, captures, accumulations
 ├── IFieldValue<T>                 — interface for resolvable field values
 ├── FieldValues                    — Static(), Generated(), From() factories
@@ -26,8 +27,7 @@ StepWise.Core
 StepWise.Http
 ├── HttpTarget                     — discovers steps by reflection, caches them
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
-├── HttpStep<TRequest, TResponse>  — declares Method, Path, Auth, Query, Headers
-└── Auth/                          — NoAuth, BearerTokenAuth, ApiKeyAuth
+└── HttpStep<TRequest, TResponse>  — declares Method, Path, Query, Headers
 
 StepWise.Json
 ├── JsonWorkflowRunner             — pure engine: step execution, path resolution, assertion evaluation
@@ -44,7 +44,7 @@ samples/StepWise.SampleWorkflows/
 ├── Requests/
 │   ├── Login.cs          — LoginResponse, LoginRequest, LoginStep
 │   ├── User.cs           — UserResponse, CreateUserRequest, CreateUserStep
-│   └── Order.cs          — OrderResponse, AddOrderItem,
+│   └── Order.cs          — OrderResponse, AddOrderItemResponse, AddOrderItem,
 │                            CreateOrderRequest, CreateOrderStep, GetOrderStep
 ├── StepWiseTestBase.cs
 └── WorkflowTests/
@@ -71,9 +71,18 @@ Response type, request record, and step class live in one file per API concept:
 // Order.cs
 public record OrderResponse(string Id, string UserId, List<OrderItemResponse> Items, string Status);
 
+public record AddOrderItemResponse(string ProductName, int Quantity, decimal UnitPrice);
+
+public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
+{
+    public IFieldValue<string>  ProductName { get; init; } = Static("Widget");
+    public IFieldValue<int>     Quantity    { get; init; } = Static(1);
+    public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
+}
+
 public record CreateOrderRequest() : WorkflowRequest<OrderResponse>("createOrder", "sample-api")
 {
-    public IFieldValue<string>                             UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
+    public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
@@ -136,11 +145,20 @@ public class PlacedOrder_CanBeRetrieved : StepWiseTestBase
 
 ### Building an array
 
+`BuildAsync` resolves all `IFieldValue<T>` properties immediately, appends the resolved dictionary to the accumulation, and returns a typed `TResponse` snapshot. `GetAccumulated<TItem>()` returns the accumulated `List<Dictionary<string, object?>>` of already-resolved values. Resolution happens once at build time — not again when the request is sent.
+
+`BuildAsync` returns `TResponse`, so callers can reference resolved values (including generated ones) directly:
+
 ```csharp
-await BuildAsync(new AddOrderItem() with { ProductName = Static("Deluxe Widget"), Quantity = Static(3) });
+var widget = await BuildAsync(new AddOrderItem() with { ProductName = Static("Deluxe Widget"), Quantity = Static(3) });
 await BuildAsync(new AddOrderItem() with { ProductName = Static("Basic Widget") });
 var order = await ExecuteAsync(new CreateOrderRequest());
+
+Assert.Equal("Deluxe Widget", widget.ProductName);  // TResponse — plain values, no IFieldValue
+Assert.Equal(3, widget.Quantity);
 ```
+
+`IFieldValue<T>` properties are **not** resolved recursively into nested records. `FieldValueResolver` resolves one level: `IFieldValue<T>` → `T`. If `T` is itself a record with `IFieldValue<U>` properties, those inner values are not resolved. Nested field values should use plain C# values, not `IFieldValue`-bearing records.
 
 ---
 

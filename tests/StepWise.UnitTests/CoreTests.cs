@@ -171,6 +171,66 @@ public class FromDefaultTests
     }
 }
 
+public class BuildableRequestAccumulationTests
+{
+    private record FakeResponse;
+    private record LineItemResponse(string Name, int Count);
+
+    private record LineItem() : BuildableRequest<LineItemResponse>
+    {
+        public IFieldValue<string> Name  { get; init; } = Static("Widget");
+        public IFieldValue<int>    Count { get; init; } = Static(1);
+    }
+
+    private record OrderRequest() : WorkflowRequest<FakeResponse>("createOrder", "test-api")
+    {
+        public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
+    }
+
+    [Fact]
+    public async Task BuildAsync_ReturnsResolvedResponse()
+    {
+        var context = new WorkflowContext();
+        var result = await context.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(3) });
+
+        Assert.Equal("Gadget", result.Name);
+        Assert.Equal(3, result.Count);
+    }
+
+    [Fact]
+    public async Task GetAccumulated_ReturnsResolvedDicts()
+    {
+        var context = new WorkflowContext();
+        await context.BuildAsync(new LineItem());
+        await context.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(3) });
+
+        var items = context.GetAccumulated<LineItem>();
+
+        Assert.Equal(2, items.Count);
+        Assert.Equal("Widget", items[0]["Name"]);
+        Assert.Equal(1, items[0]["Count"]);
+        Assert.Equal("Gadget", items[1]["Name"]);
+        Assert.Equal(3, items[1]["Count"]);
+    }
+
+    [Fact]
+    public async Task BuildableItems_AvailableInResolvedRequest()
+    {
+        var context = new WorkflowContext();
+        await context.BuildAsync(new LineItem() with { Name = Static("Widget"), Count = Static(2) });
+        await context.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(5) });
+
+        var resolved = FieldValueResolver.Resolve(new OrderRequest(), context);
+
+        var items = Assert.IsType<List<Dictionary<string, object?>>>(resolved["Items"]);
+        Assert.Equal(2, items.Count);
+        Assert.Equal("Widget", items[0]["Name"]);
+        Assert.Equal(2, items[0]["Count"]);
+        Assert.Equal("Gadget", items[1]["Name"]);
+        Assert.Equal(5, items[1]["Count"]);
+    }
+}
+
 public class TemplateFieldValueTests
 {
     private static FieldValueDefinition TemplateDef(string template) =>

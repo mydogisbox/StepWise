@@ -41,6 +41,6 @@ public abstract class StepWiseTestBase
         return _context.ExecuteAsync(request);
     }
 
-    protected Task BuildAsync<TItem>(TItem item) where TItem : BuildableRequest
+    protected Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
         => _context.BuildAsync(item);
 }

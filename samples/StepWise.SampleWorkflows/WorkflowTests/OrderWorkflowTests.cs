@@ -120,6 +120,19 @@ public class InvocationHeaders_ReceivedByServer : StepWiseTestBase
     }
 }
 
+public class BuildItem_ReturnsResolvedResponse : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        var widget = await BuildAsync(new AddOrderItem() with { ProductName = Static("Deluxe Widget"), Quantity = Static(3) });
+
+        Assert.Equal("Deluxe Widget", widget.ProductName);
+        Assert.Equal(3, widget.Quantity);
+        Assert.Equal(9.99m, widget.UnitPrice);
+    }
+}
+
 public class FromHeader_ConstructsBearerToken_ReceivedByServer : StepWiseTestBase
 {
     [Fact]

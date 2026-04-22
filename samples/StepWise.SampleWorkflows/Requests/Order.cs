@@ -7,7 +7,9 @@ namespace StepWise.SampleWorkflows;
 public record OrderItemResponse(string ProductName, int Quantity, decimal UnitPrice);
 public record OrderResponse(string Id, string UserId, List<OrderItemResponse> Items, string Status);
 
-public record AddOrderItem() : BuildableRequest
+public record AddOrderItemResponse(string ProductName, int Quantity, decimal UnitPrice);
+
+public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
 {
     public IFieldValue<string>  ProductName { get; init; } = Static("Widget");
     public IFieldValue<int>     Quantity    { get; init; } = Static(1);
@@ -17,7 +19,7 @@ public record AddOrderItem() : BuildableRequest
 public record CreateOrderRequest() : WorkflowRequest<OrderResponse>("createOrder", "sample-api")
 {
     public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
-    public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
+    public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
 public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>

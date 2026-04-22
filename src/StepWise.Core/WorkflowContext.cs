@@ -66,33 +66,39 @@ public class WorkflowContext
         }
     }
 
-    /// <summary>
-    /// Resolves all IFieldValue&lt;T&gt; fields on the item and appends it
-    /// to the accumulated list for its type.
-    /// </summary>
-    public Task BuildAsync<TItem>(TItem item) where TItem : BuildableRequest
-    {
-        var resolved = FieldValueResolver.ResolveObject(item, this);
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions =
+        new() { PropertyNameCaseInsensitive = true };
 
-        if (!_accumulated.TryGetValue(typeof(TItem), out var list))
+    /// <summary>
+    /// Resolves the item's field values immediately, stores the resolved dictionary in the
+    /// accumulated list for this item type, and returns a typed snapshot of the resolved values.
+    /// Resolution happens once at build time — no deferred re-resolution when the request is sent.
+    /// </summary>
+    public Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
+    {
+        var runtimeType = item.GetType();
+        if (!_accumulated.TryGetValue(runtimeType, out var list))
         {
             list = new List<object>();
-            _accumulated[typeof(TItem)] = list;
+            _accumulated[runtimeType] = list;
         }
 
+        var resolved = FieldValueResolver.ResolveObject(item, this);
         list.Add(resolved);
-        return Task.CompletedTask;
+
+        var json = System.Text.Json.JsonSerializer.Serialize(resolved);
+        var response = System.Text.Json.JsonSerializer.Deserialize<TResponse>(json, _jsonOptions)!;
+        return Task.FromResult(response);
     }
 
     /// <summary>
-    /// Returns all accumulated items of the given type as a list of resolved
-    /// dictionaries, then clears the accumulation for that type.
-    /// Returns an empty list if nothing has been accumulated.
+    /// Returns all accumulated resolved dictionaries for the given item type,
+    /// then clears the accumulation. Returns an empty list if nothing has been accumulated.
     /// </summary>
     public List<Dictionary<string, object?>> GetAccumulated<TItem>() where TItem : BuildableRequest
     {
         if (!_accumulated.TryGetValue(typeof(TItem), out var list))
-            return new List<Dictionary<string, object?>>();
+            return [];
 
         _accumulated.Remove(typeof(TItem));
         return list.Cast<Dictionary<string, object?>>().ToList();
