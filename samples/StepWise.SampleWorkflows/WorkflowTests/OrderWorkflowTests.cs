@@ -96,3 +96,38 @@ public class GetUsersByRole_UsesQueryParam : StepWiseTestBase
         Assert.All(admins, u => Assert.Equal("admin", u.Role));
     }
 }
+
+public class StepHeaders_ReceivedByServer : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        var echo = await ExecuteAsync(new EchoHeadersWithStepHeaderRequest());
+
+        Assert.Equal("from-step", echo["x-step-header"]);
+    }
+}
+
+public class InvocationHeaders_ReceivedByServer : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        var echo = await ExecuteAsync(new EchoHeadersRequest(),
+            headers: new() { ["x-invocation-header"] = "from-invocation" });
+
+        Assert.Equal("from-invocation", echo["x-invocation-header"]);
+    }
+}
+
+public class FromHeader_ConstructsBearerToken_ReceivedByServer : StepWiseTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        await ExecuteAsync(new LoginRequest());
+        var echo = await ExecuteAsync(new EchoHeadersWithFromAuthRequest());
+
+        Assert.StartsWith("Bearer ", echo["authorization"]);
+    }
+}

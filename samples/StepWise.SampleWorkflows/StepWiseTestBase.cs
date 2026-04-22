@@ -20,7 +20,8 @@ public abstract class StepWiseTestBase
     protected Task<TResponse> ExecuteAsync<TResponse>(
         WorkflowRequest<TResponse> request,
         Dictionary<string, string>? query = null,
-        Dictionary<string, string>? pathParams = null)
+        Dictionary<string, string>? pathParams = null,
+        Dictionary<string, string>? headers = null)
     {
         if (query is not null)
             request = request with
@@ -31,6 +32,11 @@ public abstract class StepWiseTestBase
             request = request with
             {
                 PathParams = pathParams.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
+            };
+        if (headers is not null)
+            request = request with
+            {
+                Headers = headers.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
             };
         return _context.ExecuteAsync(request);
     }

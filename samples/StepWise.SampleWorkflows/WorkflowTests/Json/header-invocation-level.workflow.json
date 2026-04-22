@@ -1,0 +1,12 @@
+{
+  "name": "InvocationHeaders_ReceivedByServer",
+  "steps": [
+    {
+      "step": "echoHeaders",
+      "headers": { "x-invocation-header": { "static": "from-invocation" } }
+    }
+  ],
+  "assertions": [
+    { "equal": ["echoHeaders.x-invocation-header", "from-invocation"] }
+  ]
+}

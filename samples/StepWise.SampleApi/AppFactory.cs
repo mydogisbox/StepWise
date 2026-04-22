@@ -99,6 +99,11 @@ public static class AppFactory
             catch (KeyNotFoundException) { return Results.NotFound(new { error = $"User '{userId}' not found." }); }
         }).RequireAuthorization();
 
+        app.MapGet("/echo/headers", (HttpContext ctx) =>
+            Results.Ok(ctx.Request.Headers
+                .ToDictionary(h => h.Key.ToLower(), h => h.Value.ToString()))
+        ).AllowAnonymous();
+
         app.MapGet("/health", () => Results.Ok());
 
         return app;

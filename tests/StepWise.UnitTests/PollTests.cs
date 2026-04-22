@@ -138,7 +138,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         return (workflow, stepDefs);
     }
 
-    private Dictionary<string, string> TestTargets =>
+    private Dictionary<string, TargetDefinition> TestTargets =>
         new(StringComparer.OrdinalIgnoreCase) { ["api"] = $"http://127.0.0.1:{_port}" };
 
     [Fact]
@@ -263,7 +263,7 @@ public class CaptureRequestAsTests : IDisposable
 
     public void Dispose() => _listener.Stop();
 
-    private Dictionary<string, string> TestTargets =>
+    private Dictionary<string, TargetDefinition> TestTargets =>
         new(StringComparer.OrdinalIgnoreCase) { ["api"] = $"http://127.0.0.1:{_port}" };
 
     [Fact]

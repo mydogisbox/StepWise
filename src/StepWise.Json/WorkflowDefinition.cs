@@ -19,6 +19,17 @@ public record RequestsDefinition(
 );
 
 /// <summary>
+/// A target entry in the targets file — a base URL with optional default headers.
+/// </summary>
+public record TargetDefinition
+{
+    public string BaseUrl { get; init; } = "";
+    public Dictionary<string, FieldValueDefinition>? Headers { get; init; }
+
+    public static implicit operator TargetDefinition(string url) => new() { BaseUrl = url };
+}
+
+/// <summary>
 /// Defines how a named step is executed — method, path, target, auth, and defaults.
 /// </summary>
 public record StepDefinition
@@ -40,6 +51,9 @@ public record StepDefinition
     /// Resolved independently of the request body.
     /// </summary>
     public Dictionary<string, FieldValueDefinition>? Query { get; init; }
+
+    /// <summary>HTTP headers sent with every invocation of this step. Merged over target-level headers.</summary>
+    public Dictionary<string, FieldValueDefinition>? Headers { get; init; }
 
     /// <summary>Default field values sent in the request body.</summary>
     public Dictionary<string, FieldValueDefinition>? Defaults { get; init; }
@@ -109,6 +123,9 @@ public record StepInvocation
 
     /// <summary>Per-invocation query parameter overrides. Merged over the step definition's query.</summary>
     public Dictionary<string, FieldValueDefinition>? Query { get; init; }
+
+    /// <summary>Per-invocation header overrides. Merged over target-level and step-level headers.</summary>
+    public Dictionary<string, FieldValueDefinition>? Headers { get; init; }
 }
 
 /// <summary>
@@ -124,6 +141,14 @@ public record FieldValueDefinition
 
     [JsonPropertyName("from")]
     public string? From { get; init; }
+
+    /// <summary>
+    /// A string template where <c>{capture.path}</c> placeholders are substituted with resolved capture values.
+    /// Use <c>{{</c> and <c>}}</c> for literal braces.
+    /// Example: <c>"Bearer {login.token}"</c>
+    /// </summary>
+    [JsonPropertyName("template")]
+    public string? Template { get; init; }
 
     /// <summary>
     /// Fallback value used when <see cref="From"/> resolves to null (capture missing or field absent).

@@ -1,0 +1,9 @@
+{
+  "name": "StepHeaders_ReceivedByServer",
+  "steps": [
+    { "step": "echoHeadersWithStepHeader" }
+  ],
+  "assertions": [
+    { "equal": ["echoHeadersWithStepHeader.x-step-header", "from-step"] }
+  ]
+}

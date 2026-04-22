@@ -1,0 +1,25 @@
+{
+  "steps": {
+    "echoHeaders": {
+      "target": "sample-api",
+      "method": "GET",
+      "path": "/echo/headers"
+    },
+    "echoHeadersWithStepHeader": {
+      "target": "sample-api",
+      "method": "GET",
+      "path": "/echo/headers",
+      "headers": {
+        "x-step-header": { "static": "from-step" }
+      }
+    },
+    "echoHeadersWithTemplateAuth": {
+      "target": "sample-api",
+      "method": "GET",
+      "path": "/echo/headers",
+      "headers": {
+        "authorization": { "template": "Bearer {login.token}" }
+      }
+    }
+  }
+}

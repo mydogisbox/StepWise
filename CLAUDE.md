@@ -26,7 +26,7 @@ StepWise.Core
 StepWise.Http
 ├── HttpTarget                     — discovers steps by reflection, caches them
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
-├── HttpStep<TRequest, TResponse>  — declares Method, Path, Auth
+├── HttpStep<TRequest, TResponse>  — declares Method, Path, Auth, Query, Headers
 └── Auth/                          — NoAuth, BearerTokenAuth, ApiKeyAuth
 
 StepWise.Json
@@ -270,10 +270,13 @@ Workflow invocations can override `pathParams` and `query` on a per-call basis, 
 ### Field value types
 
 ```json
-{ "static": "some value" }     // literal — any JSON primitive or array/object
-{ "generated": "guid" }        // built-in generators: guid, email, int, decimal
-{ "from": "login.token" }      // capture path — see Path reference syntax below
+{ "static": "some value" }                   // literal — any JSON primitive or array/object
+{ "generated": "guid" }                      // built-in generators: guid, email, int, decimal
+{ "from": "login.token" }                    // capture path — see Path reference syntax below
+{ "template": "Bearer {login.token}" }       // string with {capture.path} placeholders
 ```
+
+`template` substitutes `{capture.path}` placeholders with resolved values. Use `{{` and `}}` for literal braces. Throws if any placeholder cannot be resolved.
 
 `from` accepts an optional `default` that is used when the referenced step has not run:
 
@@ -283,9 +286,9 @@ Workflow invocations can override `pathParams` and `query` on a per-call basis, 
 
 - If `createUser` was never executed, the default resolves and is used.
 - If `createUser` ran but `id` is missing or null, a `JsonWorkflowException` is thrown — the step ran, so a missing field is a bug, not an absent step.
-- The `default` is itself a field value definition and supports `static`, `generated`, or `from`.
+- The `default` is itself a field value definition and supports `static`, `generated`, `from`, or `template`.
 
-When `static` contains a JSON object, each property value is resolved recursively as a `FieldValueDefinition`. An object with a `static`, `from`, or `generated` key is treated as a field value definition; all other objects are structural nodes whose children are resolved the same way. This allows `from` and `generated` at any depth:
+When `static` contains a JSON object, each property value is resolved recursively as a `FieldValueDefinition`. An object with a `static`, `from`, `generated`, or `template` key is treated as a field value definition; all other objects are structural nodes whose children are resolved the same way. This allows `from` and `generated` at any depth:
 
 ```json
 "contact": { "static": {
@@ -359,8 +362,80 @@ This means a workflow only needs to specify the properties that differ:
 
 ### Targets file
 
+The targets file maps target names to target definitions. Each target definition has a `baseUrl` and optional `headers` sent with every request to that target:
+
 ```json
-{ "sample-api": "http://localhost:4200" }
+{
+  "sample-api": { "baseUrl": "http://localhost:4200" },
+  "third-party": {
+    "baseUrl": "https://api.example.com",
+    "headers": {
+      "X-Tenant-Id": { "static": "acme" }
+    }
+  }
+}
+```
+
+### Headers
+
+Three levels of headers are supported, merged in order (later wins for matching keys):
+
+1. **Target-level** — defined in the targets file; sent with every request to that target.
+2. **Step-level** — defined in the requests file under `headers`; sent with every invocation of that step definition.
+3. **Invocation-level** — defined in the workflow file under `headers` on a `step` or `poll` invocation; applies to that call only.
+
+#### In the requests file (step-level)
+
+```json
+"createItem": {
+  "target": "sample-api",
+  "method": "POST",
+  "path": "/items",
+  "headers": {
+    "X-Api-Version": { "static": "2" }
+  }
+}
+```
+
+#### In the workflow file (per-invocation)
+
+```json
+{ "step": "createItem", "headers": { "X-Request-Id": { "from": "session.requestId" } } }
+```
+
+#### In C# (step-level)
+
+Override `Headers` on `HttpStep`:
+
+```csharp
+public class CreateItemStep : HttpStep<CreateItemRequest, ItemResponse>
+{
+    public override HttpMethod Method => HttpMethod.Post;
+    public override string Path => "/items";
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>
+        {
+            ["X-Api-Version"] = Static("2")
+        };
+}
+```
+
+#### In C# (per-request)
+
+Pass `headers:` to `ExecuteAsync` or override `Headers` on the request with `with`:
+
+```csharp
+await ExecuteAsync(new CreateItemRequest(), headers: new() { ["X-Request-Id"] = myId });
+```
+
+Or wire into `WithTarget` to set target-level headers:
+
+```csharp
+new HttpTarget(SampleApiUrl, Assembly.GetExecutingAssembly())
+    .WithHeaders(new Dictionary<string, IFieldValue<string>>
+    {
+        ["X-Tenant-Id"] = Static("acme")
+    })
 ```
 
 ### `poll` — polling a step until a condition is met

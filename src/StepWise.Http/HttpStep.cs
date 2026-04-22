@@ -21,4 +21,11 @@ public abstract class HttpStep<TRequest, TResponse>
     /// </summary>
     public virtual IReadOnlyDictionary<string, IFieldValue<string>> Query { get; } =
         new Dictionary<string, IFieldValue<string>>();
+
+    /// <summary>
+    /// HTTP headers sent with every invocation of this step.
+    /// Merged over target-level headers; request-level headers (from <see cref="WorkflowRequest{TResponse}.Headers"/>) override these.
+    /// </summary>
+    public virtual IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>();
 }

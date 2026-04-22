@@ -16,6 +16,7 @@ public static class FieldValueResolver
         nameof(WorkflowRequest<object>.TargetKey),
         nameof(WorkflowRequest<object>.PathParams),
         nameof(WorkflowRequest<object>.Query),
+        nameof(WorkflowRequest<object>.Headers),
         "EqualityContract",
     };
 

@@ -30,6 +30,7 @@ public static class HttpExecutor
     /// <param name="pathParams">Values substituted into <c>{placeholder}</c> segments of <paramref name="path"/>. Never sent in the body.</param>
     /// <param name="queryParams">Key-value pairs appended to the URL as a query string.</param>
     /// <param name="bodyFields">Fields serialized as the JSON request body (ignored for GET and DELETE).</param>
+    /// <param name="headers">Additional HTTP headers sent with the request. Applied before auth.</param>
     /// <param name="applyAuth">Delegate that applies authentication headers to the request.</param>
     public static async Task<string> SendAsync(
         string baseUrl,
@@ -38,6 +39,7 @@ public static class HttpExecutor
         Dictionary<string, object?> pathParams,
         Dictionary<string, object?> queryParams,
         Dictionary<string, object?> bodyFields,
+        Dictionary<string, object?> headers,
         Func<HttpRequestMessage, Task> applyAuth)
     {
         // Substitute path parameters
@@ -61,6 +63,9 @@ public static class HttpExecutor
             var json = JsonSerializer.Serialize(bodyFields, JsonOptions);
             httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
         }
+
+        foreach (var (key, value) in headers)
+            httpRequest.Headers.TryAddWithoutValidation(key, value?.ToString() ?? "");
 
         await applyAuth(httpRequest);
 

@@ -13,14 +13,30 @@ public class HttpTarget : ITarget
     private readonly string _baseUrl;
     private readonly IEnumerable<Assembly> _assemblies;
     private readonly Dictionary<Type, object> _stepCache = new();
+    private readonly IReadOnlyDictionary<string, IFieldValue<string>> _headers;
 
     public HttpTarget(string baseUrl, params Assembly[] assemblies)
     {
         _baseUrl = baseUrl.TrimEnd('/');
+        _headers = new Dictionary<string, IFieldValue<string>>();
         _assemblies = assemblies.Length > 0
             ? assemblies
             : [Assembly.GetCallingAssembly()];
     }
+
+    private HttpTarget(
+        string baseUrl,
+        IReadOnlyDictionary<string, IFieldValue<string>> headers,
+        IEnumerable<Assembly> assemblies)
+    {
+        _baseUrl = baseUrl.TrimEnd('/');
+        _headers = headers;
+        _assemblies = assemblies;
+    }
+
+    /// <summary>Returns a new target that sends the given headers with every request.</summary>
+    public HttpTarget WithHeaders(IReadOnlyDictionary<string, IFieldValue<string>> headers)
+        => new(_baseUrl, headers, _assemblies);
 
     public Task<TResponse> ExecuteAsync<TResponse>(
         WorkflowRequest<TResponse> request,
@@ -45,6 +61,13 @@ public class HttpTarget : ITarget
             queryParams[kv.Key] = kv.Value;
         var bodyFields  = FieldValueResolver.Resolve(request, context);
 
+        // Headers: target → step → request (each layer wins over the one before)
+        var headers = FieldValueResolver.ResolveGroup(_headers, context);
+        foreach (var kv in FieldValueResolver.ResolveGroup(step.Headers, context))
+            headers[kv.Key] = kv.Value;
+        foreach (var kv in FieldValueResolver.ResolveGroup(request.Headers, context))
+            headers[kv.Key] = kv.Value;
+
         var responseJson = await HttpExecutor.SendAsync(
             _baseUrl,
             step.Method,
@@ -52,6 +75,7 @@ public class HttpTarget : ITarget
             pathParams,
             queryParams,
             bodyFields,
+            headers,
             req => step.Auth.ApplyAsync(req, context));
 
         return HttpExecutor.Deserialize<TResponse>(responseJson);

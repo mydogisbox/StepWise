@@ -46,8 +46,11 @@ public static class JsonValueResolver
             return new FromJsonValue(def.From, fallback);
         }
 
+        if (def.Template is not null)
+            return new TemplateJsonValue(def.Template);
+
         throw new JsonWorkflowException(
-            "A field value definition must have exactly one of: 'static', 'generated', or 'from'.");
+            "A field value definition must have exactly one of: 'static', 'generated', 'from', or 'template'.");
     }
 
     public static object? JsonElementToObject(JsonElement element) => element.ValueKind switch
@@ -77,6 +80,7 @@ public static class JsonValueResolver
             if (element.TryGetProperty("static", out _) ||
                 element.TryGetProperty("from",   out _) ||
                 element.TryGetProperty("generated", out _) ||
+                element.TryGetProperty("template", out _) ||
                 element.TryGetProperty("default", out _))
             {
                 var def = JsonSerializer.Deserialize<FieldValueDefinition>(element, DeserializeOptions)!;
@@ -120,6 +124,60 @@ public sealed class NestedStaticJsonValue(System.Text.Json.JsonElement element) 
 public sealed class GeneratedJsonValue(Func<object?> generator) : IJsonFieldValue
 {
     public object? Resolve(Dictionary<string, object?> _) => generator();
+}
+
+/// <summary>
+/// Resolves a string template where <c>{capture.path}</c> placeholders are substituted with
+/// resolved capture values. Use <c>{{</c> and <c>}}</c> for literal braces.
+/// Throws <see cref="JsonWorkflowException"/> if any placeholder cannot be resolved.
+/// </summary>
+public sealed class TemplateJsonValue(string template) : IJsonFieldValue
+{
+    public object? Resolve(Dictionary<string, object?> captures)
+    {
+        var result = new System.Text.StringBuilder();
+        var i = 0;
+
+        while (i < template.Length)
+        {
+            if (template[i] == '{')
+            {
+                // Escaped brace: {{ → {
+                if (i + 1 < template.Length && template[i + 1] == '{')
+                {
+                    result.Append('{');
+                    i += 2;
+                    continue;
+                }
+
+                var close = template.IndexOf('}', i + 1);
+                if (close < 0)
+                    throw new JsonWorkflowException(
+                        $"Unclosed '{{' in template: '{template}'.");
+
+                var path = template[(i + 1)..close];
+                var value = JsonWorkflowRunner.ResolveCapturePath(path, captures);
+                if (value is null)
+                    throw new JsonWorkflowException(
+                        $"Template placeholder '{{{path}}}' could not be resolved in template: '{template}'.");
+
+                result.Append(value);
+                i = close + 1;
+            }
+            else if (template[i] == '}' && i + 1 < template.Length && template[i + 1] == '}')
+            {
+                // Escaped brace: }} → }
+                result.Append('}');
+                i += 2;
+            }
+            else
+            {
+                result.Append(template[i++]);
+            }
+        }
+
+        return result.ToString();
+    }
 }
 
 public sealed class FromJsonValue(string path, IJsonFieldValue? fallback = null) : IJsonFieldValue

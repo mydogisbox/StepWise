@@ -1,0 +1,8 @@
+{
+  "sample-api": {
+    "baseUrl": "http://localhost:4200",
+    "headers": {
+      "x-target-header": { "static": "from-target" }
+    }
+  }
+}

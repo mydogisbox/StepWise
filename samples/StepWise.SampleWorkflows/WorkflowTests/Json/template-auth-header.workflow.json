@@ -1,0 +1,10 @@
+{
+  "name": "TemplateFieldValue_UsedInAuthHeader",
+  "steps": [
+    { "step": "login" },
+    { "step": "createUserTemplateAuth" }
+  ],
+  "assertions": [
+    { "notEmpty": "createUserTemplateAuth.id" }
+  ]
+}

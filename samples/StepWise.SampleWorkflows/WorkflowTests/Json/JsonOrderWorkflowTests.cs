@@ -66,6 +66,44 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     [Fact]
     public Task GetOrder_PathParamOverride_RetrievesCorrectOrder() =>
         RunWorkflowAsync("WorkflowTests/Json/retrieve-specific-order.workflow.json");
+
+    [Fact]
+    public Task TemplateFieldValue_UsedInAuthHeader() =>
+        RunWorkflowAsync("WorkflowTests/Json/template-auth-header.workflow.json");
+}
+
+public class JsonHeaderTests : JsonWorkflowTestBase
+{
+    protected override IReadOnlyList<string> RequestPaths =>
+    [
+        "Requests/auth.requests.json",
+        "Requests/echo.requests.json"
+    ];
+
+    protected override string TargetsPath => "WorkflowTests/Json/targets.json";
+
+    [Fact]
+    public Task StepHeaders_ReceivedByServer() =>
+        RunWorkflowAsync("WorkflowTests/Json/header-step-level.workflow.json");
+
+    [Fact]
+    public Task InvocationHeaders_ReceivedByServer() =>
+        RunWorkflowAsync("WorkflowTests/Json/header-invocation-level.workflow.json");
+
+}
+
+public class JsonTargetHeaderTests : JsonWorkflowTestBase
+{
+    protected override IReadOnlyList<string> RequestPaths =>
+    [
+        "Requests/echo.requests.json"
+    ];
+
+    protected override string TargetsPath => "WorkflowTests/Json/header-targets.json";
+
+    [Fact]
+    public Task TargetHeaders_ReceivedByServer() =>
+        RunWorkflowAsync("WorkflowTests/Json/header-target-level.workflow.json");
 }
 
 public class JsonFromDefaultTests : JsonWorkflowTestBase

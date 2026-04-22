@@ -3,6 +3,7 @@ using StepWise.Core;
 using StepWise.Json;
 using static StepWise.Core.FieldValues;
 using Xunit;
+using System.Collections.Generic;
 
 namespace StepWise.UnitTests;
 
@@ -168,4 +169,90 @@ public class FromDefaultTests
         await Assert.ThrowsAsync<JsonWorkflowException>(() =>
             JsonWorkflowRunner.RunAsync(workflow, stepDefs, []));
     }
+}
+
+public class TemplateFieldValueTests
+{
+    private static FieldValueDefinition TemplateDef(string template) =>
+        new() { Template = template };
+
+    private static Dictionary<string, object?> LoginCapture(string token) => new()
+    {
+        ["login"] = new Dictionary<string, object?> { ["token"] = token }
+    };
+
+    [Fact]
+    public void Template_SubstitutesCapturePath()
+    {
+        var result = JsonValueResolver.Resolve(TemplateDef("Bearer {login.token}"))
+            .Resolve(LoginCapture("abc123"));
+
+        Assert.Equal("Bearer abc123", result);
+    }
+
+    [Fact]
+    public void Template_SubstitutesMultiplePlaceholders()
+    {
+        var captures = new Dictionary<string, object?>
+        {
+            ["user"] = new Dictionary<string, object?> { ["first"] = "Alice", ["last"] = "Smith" }
+        };
+        var result = JsonValueResolver.Resolve(TemplateDef("{user.first} {user.last}"))
+            .Resolve(captures);
+
+        Assert.Equal("Alice Smith", result);
+    }
+
+    [Fact]
+    public void Template_NoPlaceholders_ReturnsLiteral()
+    {
+        var result = JsonValueResolver.Resolve(TemplateDef("plain text")).Resolve([]);
+
+        Assert.Equal("plain text", result);
+    }
+
+    [Fact]
+    public void Template_EscapedBraces_ArePreserved()
+    {
+        var result = JsonValueResolver.Resolve(TemplateDef("{{literal}}")).Resolve([]);
+
+        Assert.Equal("{literal}", result);
+    }
+
+    [Fact]
+    public void Template_MissingCapture_Throws()
+    {
+        Assert.Throws<JsonWorkflowException>(() =>
+            JsonValueResolver.Resolve(TemplateDef("Bearer {login.token}")).Resolve([]));
+    }
+
+    [Fact]
+    public async Task Template_UsedAsHeader_InBuildWorkflow()
+    {
+        var stepDefs = new Dictionary<string, StepDefinition>
+        {
+            ["setToken"] = new() { AccumulateAs = "tokens", Defaults = new() { ["token"] = StaticField("my-token") } },
+            ["addItem"]  = new()
+            {
+                AccumulateAs = "items",
+                Defaults = new()
+                {
+                    ["authHeader"] = new FieldValueDefinition { Template = "Bearer {setToken.token}" }
+                }
+            }
+        };
+
+        var workflow = new WorkflowDefinition("test",
+            [
+                new StepInvocation { Build = "setToken" },
+                new StepInvocation { Build = "addItem" }
+            ],
+            [new AssertionDefinition { Equal = ["addItem.authHeader", "Bearer my-token"] }]);
+
+        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
+        Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
+    }
+
+    private static FieldValueDefinition StaticField(object value) =>
+        new() { Static = JsonSerializer.SerializeToElement(value) };
 }

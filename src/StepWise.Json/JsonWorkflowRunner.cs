@@ -65,11 +65,11 @@ public class JsonWorkflowRunner
         return merged;
     }
 
-    public static Dictionary<string, string> LoadTargets(string? targetsPath)
+    public static Dictionary<string, TargetDefinition> LoadTargets(string? targetsPath)
     {
         if (targetsPath is null) return [];
         var json = File.ReadAllText(targetsPath);
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions)
+        return JsonSerializer.Deserialize<Dictionary<string, TargetDefinition>>(json, JsonOptions)
             ?? throw new JsonWorkflowException($"Failed to deserialize targets from '{targetsPath}'.");
     }
 
@@ -97,15 +97,13 @@ public class JsonWorkflowRunner
     public static async Task<WorkflowResult> RunAsync(
         WorkflowDefinition workflow,
         Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, string> targets,
+        Dictionary<string, TargetDefinition> targets,
         IReadOnlyDictionary<string, WorkflowDefinition>? namedWorkflows = null)
     {
-        var baseUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, url) in targets)
-            baseUrls[key] = url;
+        var resolvedTargets = new Dictionary<string, TargetDefinition>(targets, StringComparer.OrdinalIgnoreCase);
 
         var captures = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        var stepResults = await ExecuteStepsAsync(workflow.Steps, stepDefs, baseUrls, captures, namedWorkflows ?? new Dictionary<string, WorkflowDefinition>());
+        var stepResults = await ExecuteStepsAsync(workflow.Steps, stepDefs, resolvedTargets, captures, namedWorkflows ?? new Dictionary<string, WorkflowDefinition>());
 
         var assertionErrors = workflow.Assertions is not null
             ? EvaluateAssertions(workflow.Assertions, captures)
@@ -141,7 +139,7 @@ public class JsonWorkflowRunner
     private static async Task<List<StepResult>> ExecuteStepsAsync(
         IEnumerable<StepInvocation> steps,
         Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, string> baseUrls,
+        Dictionary<string, TargetDefinition> targets,
         Dictionary<string, object?> captures,
         IReadOnlyDictionary<string, WorkflowDefinition> namedWorkflows)
     {
@@ -149,13 +147,13 @@ public class JsonWorkflowRunner
         foreach (var invocation in steps)
         {
             if (invocation.Step is not null)
-                results.Add(await ExecuteStepAsync(invocation, stepDefs, baseUrls, captures));
+                results.Add(await ExecuteStepAsync(invocation, stepDefs, targets, captures));
             else if (invocation.Build is not null)
                 results.Add(BuildItem(invocation, stepDefs, captures));
             else if (invocation.Poll is not null)
-                results.Add(await PollStepAsync(invocation, stepDefs, baseUrls, captures));
+                results.Add(await PollStepAsync(invocation, stepDefs, targets, captures));
             else if (invocation.Workflow is not null)
-                results.AddRange(await ExecuteNestedWorkflowAsync(invocation.Workflow, stepDefs, baseUrls, captures, namedWorkflows));
+                results.AddRange(await ExecuteNestedWorkflowAsync(invocation.Workflow, stepDefs, targets, captures, namedWorkflows));
             else
                 throw new JsonWorkflowException("Each step must have 'step', 'build', 'poll', or 'workflow'.");
         }
@@ -165,7 +163,7 @@ public class JsonWorkflowRunner
     private static async Task<List<StepResult>> ExecuteNestedWorkflowAsync(
         string workflowRef,
         Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, string> baseUrls,
+        Dictionary<string, TargetDefinition> targets,
         Dictionary<string, object?> captures,
         IReadOnlyDictionary<string, WorkflowDefinition> namedWorkflows)
     {
@@ -180,13 +178,13 @@ public class JsonWorkflowRunner
             nested = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions)
                 ?? throw new JsonWorkflowException($"Failed to deserialize nested workflow from '{workflowRef}'.");
         }
-        return await ExecuteStepsAsync(nested.Steps, stepDefs, baseUrls, captures, namedWorkflows);
+        return await ExecuteStepsAsync(nested.Steps, stepDefs, targets, captures, namedWorkflows);
     }
 
     private static async Task<StepResult> ExecuteStepAsync(
         StepInvocation invocation,
         Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, string> baseUrls,
+        Dictionary<string, TargetDefinition> targets,
         Dictionary<string, object?> captures)
     {
         var stepName = invocation.Step!;
@@ -196,14 +194,18 @@ public class JsonWorkflowRunner
                 $"Step '{stepName}' not found in loaded request files. " +
                 $"Available: [{string.Join(", ", stepDefs.Keys)}]");
 
-        if (!baseUrls.TryGetValue(stepDef.Target, out var baseUrl))
+        if (!targets.TryGetValue(stepDef.Target, out var target))
             throw new JsonWorkflowException(
                 $"Target '{stepDef.Target}' not found. " +
-                $"Available: [{string.Join(", ", baseUrls.Keys)}]");
+                $"Available: [{string.Join(", ", targets.Keys)}]");
 
         var pathParams  = ResolveFieldGroup(stepDef.PathParams, invocation.PathParams, captures);
-        var queryParams = ResolveFieldGroup(stepDef.Query, invocation.Query, captures);
+        var queryParams = ResolveFieldGroup(stepDef.Query,       invocation.Query,      captures);
+        var headers     = ResolveFieldGroup(target.Headers,      null,                  captures);
+        foreach (var kv in ResolveFieldGroup(stepDef.Headers, invocation.Headers, captures))
+            headers[kv.Key] = kv.Value;
         var bodyFields  = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
+        var baseUrl = target.BaseUrl;
         var method = new HttpMethod(stepDef.Method.ToUpper());
         var applyAuth = BuildAuthApplier(stepDef.Auth, captures);
 
@@ -211,7 +213,7 @@ public class JsonWorkflowRunner
             captures[requestKey] = bodyFields;
 
         var responseJson = await HttpExecutor.SendAsync(
-            baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, applyAuth);
+            baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers, applyAuth);
 
         using var doc = JsonDocument.Parse(responseJson);
         object? captured = doc.RootElement.ValueKind == JsonValueKind.Array
@@ -259,16 +261,16 @@ public class JsonWorkflowRunner
     private static async Task<StepResult> PollStepAsync(
         StepInvocation invocation,
         Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, string> baseUrls,
+        Dictionary<string, TargetDefinition> targets,
         Dictionary<string, object?> captures)
     {
         var stepName = invocation.Poll!;
-        var executeInvocation = new StepInvocation { Step = stepName, CaptureAs = invocation.CaptureAs, With = invocation.With };
+        var executeInvocation = new StepInvocation { Step = stepName, CaptureAs = invocation.CaptureAs, With = invocation.With, Headers = invocation.Headers };
         var deadline = DateTime.UtcNow.AddMilliseconds(invocation.TimeoutMs);
 
         while (true)
         {
-            var result = await ExecuteStepAsync(executeInvocation, stepDefs, baseUrls, captures);
+            var result = await ExecuteStepAsync(executeInvocation, stepDefs, targets, captures);
 
             if (invocation.Until is null || EvaluateAssertions([invocation.Until], captures).Count == 0)
                 return result;

@@ -21,4 +21,10 @@ public abstract record WorkflowRequest<TResponse>(string StepName, string Target
     /// </summary>
     public virtual IReadOnlyDictionary<string, IFieldValue<string>> Query { get; init; }
         = new Dictionary<string, IFieldValue<string>>();
+
+    /// <summary>
+    /// HTTP headers sent with this request. Overrides matching keys from the target and step headers.
+    /// </summary>
+    public virtual IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; init; }
+        = new Dictionary<string, IFieldValue<string>>();
 }
