@@ -4,7 +4,9 @@
       "target": "sample-api",
       "method": "POST",
       "path": "/users",
-      "auth": { "type": "bearer", "from": "login.token" },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      },
       "defaults": {
         "email":     { "generated": "email" },
         "firstName": { "static": "Test" },
@@ -24,7 +26,9 @@
       "target": "sample-api",
       "method": "POST",
       "path": "/orders",
-      "auth": { "type": "bearer", "from": "login.token" },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      },
       "defaults": {
         "userId": { "from": "createUser.id" },
         "items":  { "from": "orderItems" }
@@ -34,7 +38,9 @@
       "target": "sample-api",
       "method": "GET",
       "path": "/orders/{orderId}",
-      "auth": { "type": "bearer", "from": "login.token" },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      },
       "pathParams": {
         "orderId": { "from": "createOrder.id" }
       }

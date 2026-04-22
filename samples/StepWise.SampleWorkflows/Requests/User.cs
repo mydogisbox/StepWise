@@ -1,6 +1,5 @@
 using StepWise.Core;
 using StepWise.Http;
-using StepWise.Http.Auth;
 using static StepWise.Core.FieldValues;
 
 namespace StepWise.SampleWorkflows;
@@ -19,9 +18,11 @@ public class CreateUserStep : HttpStep<CreateUserRequest, UserResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
     public override string Path => "/users";
-    public override IAuthProvider Auth => BearerTokenAuth.From(
-        ctx => ctx.Get<LoginResponse>("login").Token
-    );
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>
+        {
+            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+        };
 }
 
 public record GetUsersByRoleRequest() : WorkflowRequest<List<UserResponse>>("getUsersByRole", "sample-api");
@@ -30,9 +31,11 @@ public class GetUsersByRoleStep : HttpStep<GetUsersByRoleRequest, List<UserRespo
 {
     public override HttpMethod Method => HttpMethod.Get;
     public override string Path => "/users";
-    public override IAuthProvider Auth => BearerTokenAuth.From(
-        ctx => ctx.Get<LoginResponse>("login").Token
-    );
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>
+        {
+            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+        };
     public override IReadOnlyDictionary<string, IFieldValue<string>> Query { get; } = new Dictionary<string, IFieldValue<string>>
     {
         ["role"] = Static("user")

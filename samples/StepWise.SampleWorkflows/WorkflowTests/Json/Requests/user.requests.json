@@ -4,31 +4,20 @@
       "target": "sample-api",
       "method": "GET",
       "path": "/users",
-      "auth": { "type": "bearer", "from": "login.token" },
-      "query": {
-        "role": { "static": "user" }
-      }
-    },
-    "createUserTemplateAuth": {
-      "target": "sample-api",
-      "method": "POST",
-      "path": "/users",
-      "auth": { "type": "none" },
       "headers": {
         "Authorization": { "template": "Bearer {login.token}" }
       },
-      "defaults": {
-        "email":     { "generated": "email" },
-        "firstName": { "static": "Test" },
-        "lastName":  { "static": "User" },
-        "role":      { "static": "user" }
+      "query": {
+        "role": { "static": "user" }
       }
     },
     "updateUserAddress": {
       "target": "sample-api",
       "method": "PUT",
       "path": "/users/{userId}/address",
-      "auth": { "type": "bearer", "from": "login.token" },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      },
       "pathParams": {
         "userId": { "from": "createUser.id" }
       },

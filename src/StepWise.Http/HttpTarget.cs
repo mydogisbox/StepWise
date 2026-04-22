@@ -75,8 +75,7 @@ public class HttpTarget : ITarget
             pathParams,
             queryParams,
             bodyFields,
-            headers,
-            req => step.Auth.ApplyAsync(req, context));
+            headers);
 
         return HttpExecutor.Deserialize<TResponse>(responseJson);
     }

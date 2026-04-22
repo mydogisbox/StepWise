@@ -30,14 +30,13 @@ public record TargetDefinition
 }
 
 /// <summary>
-/// Defines how a named step is executed — method, path, target, auth, and defaults.
+/// Defines how a named step is executed — method, path, target, and defaults.
 /// </summary>
 public record StepDefinition
 {
     public string Target { get; init; } = "";
     public string Method { get; init; } = "POST";
     public string Path   { get; init; } = "";
-    public AuthDefinition? Auth { get; init; }
 
     /// <summary>
     /// Values substituted into <c>{placeholder}</c> segments of <see cref="Path"/>.
@@ -60,23 +59,6 @@ public record StepDefinition
 
     /// <summary>Required for build steps — names the collection that accumulated items are stored under.</summary>
     public string? AccumulateAs { get; init; }
-}
-
-/// <summary>
-/// Auth configuration for a step definition.
-/// </summary>
-public record AuthDefinition
-{
-    /// <summary>none | bearer | apikey</summary>
-    public string Type { get; init; } = "none";
-
-    [JsonPropertyName("from")]
-    public string? From { get; init; }
-
-    public string? Token { get; init; }
-    public string? Header { get; init; }
-    public string? QueryParam { get; init; }
-    public FieldValueDefinition? Key { get; init; }
 }
 
 /// <summary>

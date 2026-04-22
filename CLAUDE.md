@@ -79,9 +79,13 @@ public record CreateOrderRequest() : WorkflowRequest<OrderResponse>("createOrder
 
 public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 {
-    public override HttpMethod    Method => HttpMethod.Post;
-    public override string        Path   => "/orders";
-    public override IAuthProvider Auth   => BearerTokenAuth.From(ctx => ctx.Get<LoginResponse>("login").Token);
+    public override HttpMethod Method => HttpMethod.Post;
+    public override string     Path   => "/orders";
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>
+        {
+            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+        };
 }
 ```
 
@@ -178,7 +182,9 @@ var order = await ExecuteAsync(new CreateOrderRequest());
       "target": "sample-api",
       "method": "POST",
       "path": "/orders",
-      "auth": { "type": "bearer", "from": "login.token" },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      },
       "defaults": {
         "userId": { "from": "createUser.id" },
         "items":  { "from": "orderItems" }
@@ -197,7 +203,9 @@ Values to substitute into `{placeholder}` segments of the path. Never sent in th
   "target": "sample-api",
   "method": "GET",
   "path": "/orders/{orderId}",
-  "auth": { "type": "bearer", "from": "login.token" },
+  "headers": {
+    "Authorization": { "template": "Bearer {login.token}" }
+  },
   "pathParams": {
     "orderId": { "from": "createOrder.id" }
   }
@@ -215,7 +223,9 @@ Key-value pairs appended to the URL as a query string. Resolved independently of
   "target": "sample-api",
   "method": "GET",
   "path": "/orders",
-  "auth": { "type": "bearer", "from": "login.token" },
+  "headers": {
+    "Authorization": { "template": "Bearer {login.token}" }
+  },
   "query": {
     "status": { "static": "pending" },
     "userId": { "from": "createUser.id" }
@@ -349,16 +359,6 @@ This means a workflow only needs to specify the properties that differ:
 ### Limitations
 
 - **Array merge** — deep merge only applies to objects. If both default and override resolve to an array, the override replaces the default entirely. To vary array contents across invocations, use `build` steps and reference the accumulation via `from`.
-
-### Auth types
-
-```json
-{ "type": "none" }
-{ "type": "bearer", "from": "login.token" }
-{ "type": "bearer", "token": "static-token" }
-{ "type": "apikey", "header": "X-Api-Key", "key": { "static": "my-key" } }
-{ "type": "apikey", "queryParam": "api_key", "key": { "from": "login.apiKey" } }
-```
 
 ### Targets file
 

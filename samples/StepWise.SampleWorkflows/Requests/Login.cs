@@ -1,6 +1,5 @@
 using StepWise.Core;
 using StepWise.Http;
-using StepWise.Http.Auth;
 using static StepWise.Core.FieldValues;
 
 namespace StepWise.SampleWorkflows;
@@ -17,5 +16,4 @@ public class LoginStep : HttpStep<LoginRequest, LoginResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
     public override string Path => "/auth/login";
-    public override IAuthProvider Auth => NoAuth.Instance;
 }

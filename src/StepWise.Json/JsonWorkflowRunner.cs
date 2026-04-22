@@ -207,13 +207,12 @@ public class JsonWorkflowRunner
         var bodyFields  = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
         var baseUrl = target.BaseUrl;
         var method = new HttpMethod(stepDef.Method.ToUpper());
-        var applyAuth = BuildAuthApplier(stepDef.Auth, captures);
 
         if (invocation.CaptureRequestAs is { } requestKey)
             captures[requestKey] = bodyFields;
 
         var responseJson = await HttpExecutor.SendAsync(
-            baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers, applyAuth);
+            baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers);
 
         using var doc = JsonDocument.Parse(responseJson);
         object? captured = doc.RootElement.ValueKind == JsonValueKind.Array
@@ -337,58 +336,6 @@ public class JsonWorkflowRunner
             kv => kv.Key,
             kv => JsonValueResolver.Resolve(kv.Value).Resolve(captures),
             StringComparer.OrdinalIgnoreCase);
-    }
-
-    // ── Auth ─────────────────────────────────────────────────────────────────
-
-    private static Func<HttpRequestMessage, Task> BuildAuthApplier(
-        AuthDefinition? auth,
-        Dictionary<string, object?> captures)
-    {
-        if (auth is null || auth.Type == "none")
-            return _ => Task.CompletedTask;
-
-        if (auth.Type == "bearer")
-        {
-            return req =>
-            {
-                string? token = auth.From is not null
-                    ? ResolveCapturePath(auth.From, captures)?.ToString()
-                    : auth.Token;
-
-                if (token is not null)
-                    req.Headers.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                return Task.CompletedTask;
-            };
-        }
-
-        if (auth.Type == "apikey")
-        {
-            return req =>
-            {
-                var keyValue = auth.Key is not null
-                    ? JsonValueResolver.Resolve(auth.Key).Resolve(captures)?.ToString()
-                    : null;
-
-                if (keyValue is not null)
-                {
-                    if (auth.Header is not null)
-                        req.Headers.TryAddWithoutValidation(auth.Header, keyValue);
-                    else if (auth.QueryParam is not null)
-                    {
-                        var builder = new UriBuilder(req.RequestUri!);
-                        builder.Query += (builder.Query.Length > 1 ? "&" : "") +
-                            $"{auth.QueryParam}={Uri.EscapeDataString(keyValue)}";
-                        req.RequestUri = builder.Uri;
-                    }
-                }
-                return Task.CompletedTask;
-            };
-        }
-
-        throw new JsonWorkflowException(
-            $"Unknown auth type '{auth.Type}'. Supported: none, bearer, apikey.");
     }
 
     // ── Assertions ───────────────────────────────────────────────────────────

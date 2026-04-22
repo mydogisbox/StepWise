@@ -1,6 +1,5 @@
 using StepWise.Core;
 using StepWise.Http;
-using StepWise.Http.Auth;
 using static StepWise.Core.FieldValues;
 
 namespace StepWise.SampleWorkflows;
@@ -11,7 +10,6 @@ public class EchoHeadersStep : HttpStep<EchoHeadersRequest, Dictionary<string, s
 {
     public override HttpMethod Method => HttpMethod.Get;
     public override string Path => "/echo/headers";
-    public override IAuthProvider Auth => NoAuth.Instance;
 }
 
 public record EchoHeadersWithStepHeaderRequest() : WorkflowRequest<Dictionary<string, string>>("echoHeadersWithStepHeader", "sample-api");
@@ -20,7 +18,6 @@ public class EchoHeadersWithStepHeaderStep : HttpStep<EchoHeadersWithStepHeaderR
 {
     public override HttpMethod Method => HttpMethod.Get;
     public override string Path => "/echo/headers";
-    public override IAuthProvider Auth => NoAuth.Instance;
     public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
         new Dictionary<string, IFieldValue<string>> { ["x-step-header"] = Static("from-step") };
 }
@@ -31,7 +28,6 @@ public class EchoHeadersWithFromAuthStep : HttpStep<EchoHeadersWithFromAuthReque
 {
     public override HttpMethod Method => HttpMethod.Get;
     public override string Path => "/echo/headers";
-    public override IAuthProvider Auth => NoAuth.Instance;
     public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
         new Dictionary<string, IFieldValue<string>>
         {

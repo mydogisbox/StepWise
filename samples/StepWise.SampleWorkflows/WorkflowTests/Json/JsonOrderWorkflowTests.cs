@@ -67,9 +67,6 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
     public Task GetOrder_PathParamOverride_RetrievesCorrectOrder() =>
         RunWorkflowAsync("WorkflowTests/Json/retrieve-specific-order.workflow.json");
 
-    [Fact]
-    public Task TemplateFieldValue_UsedInAuthHeader() =>
-        RunWorkflowAsync("WorkflowTests/Json/template-auth-header.workflow.json");
 }
 
 public class JsonHeaderTests : JsonWorkflowTestBase

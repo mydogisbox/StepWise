@@ -4,7 +4,6 @@
       "target": "sample-api",
       "method": "POST",
       "path": "/auth/login",
-      "auth": { "type": "none" },
       "defaults": {
         "username": { "generated": "email" },
         "password": { "static": "Password123!" }

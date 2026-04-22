@@ -1,6 +1,5 @@
 using StepWise.Core;
 using StepWise.Http;
-using StepWise.Http.Auth;
 using static StepWise.Core.FieldValues;
 
 namespace StepWise.SampleWorkflows;
@@ -25,9 +24,11 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
     public override string Path => "/orders";
-    public override IAuthProvider Auth => BearerTokenAuth.From(
-        ctx => ctx.Get<LoginResponse>("login").Token
-    );
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>
+        {
+            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+        };
 }
 
 public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder", "sample-api")
@@ -42,7 +43,9 @@ public class GetOrderStep : HttpStep<GetOrderRequest, OrderResponse>
 {
     public override HttpMethod Method => HttpMethod.Get;
     public override string Path => "/orders/{orderId}";
-    public override IAuthProvider Auth => BearerTokenAuth.From(
-        ctx => ctx.Get<LoginResponse>("login").Token
-    );
+    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+        new Dictionary<string, IFieldValue<string>>
+        {
+            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+        };
 }
