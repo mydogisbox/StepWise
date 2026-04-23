@@ -43,7 +43,11 @@ Sample structure:
 samples/StepWise.SampleWorkflows/
 ├── Requests/
 │   ├── Login.cs          — LoginResponse, LoginRequest, LoginStep
-│   ├── User.cs           — UserResponse, CreateUserRequest, CreateUserStep
+│   ├── User.cs           — UserResponse, CreateUserRequest, CreateUserStep,
+│   │                        UpdateUserAddressResponse (+ nested response types),
+│   │                        ContactFields/PrimaryFields/AddressFields/RegionFields,
+│   │                        UpdateUserAddressRequest, UpdateUserAddressStep,
+│   │                        GetUsersByRoleRequest, GetUsersByRoleStep
 │   └── Order.cs          — OrderResponse, AddOrderItemResponse, AddOrderItem,
 │                            CreateOrderRequest, CreateOrderStep, GetOrderStep
 ├── StepWiseTestBase.cs
@@ -121,6 +125,28 @@ public record SearchOrdersRequest() : WorkflowRequest<List<OrderResponse>>("sear
 }
 ```
 
+### Per-invocation overrides in C#
+
+`PathParams`, `Query`, and `Headers` can all be overridden per-call using the `with` expression, or via convenience parameters on `StepWiseTestBase.ExecuteAsync` (which accept `Dictionary<string, string>` and wrap values in `Static`):
+
+```csharp
+// Convenience parameters — static strings only
+var admins = await ExecuteAsync(new GetUsersByRoleRequest(), query: new() { ["role"] = "admin" });
+var order  = await ExecuteAsync(new GetOrderRequest(), pathParams: new() { ["orderId"] = firstId });
+var echo   = await ExecuteAsync(new EchoRequest(), headers: new() { ["X-Request-Id"] = "abc" });
+
+// with expression — full IFieldValue<string> support
+var retrieved = await ExecuteAsync(new GetOrderRequest() with
+{
+    PathParams = new Dictionary<string, IFieldValue<string>>
+    {
+        ["orderId"] = From(ctx => ctx.Get<OrderResponse>("firstOrder").Id)
+    }
+});
+```
+
+All three can be combined on the same invocation. Override values are merged over the step/request defaults — invocation wins for matching keys.
+
 ### Test class
 
 xUnit creates a new instance per class — each test gets a fresh `WorkflowContext` with no shared state:
@@ -143,6 +169,55 @@ public class PlacedOrder_CanBeRetrieved : StepWiseTestBase
 }
 ```
 
+### Field value resolution
+
+`FieldValueResolver` resolves `IFieldValue<T>` properties on any request or build item. Resolution is recursive: after resolving `IFieldValue<T>` → `T`, if `T` is itself a record with `IFieldValue<U>` properties, those are resolved too — producing a nested `Dictionary<string, object?>`. This continues to arbitrary depth. List elements are also recursed into.
+
+This means nested records with `IFieldValue<T>` fields work naturally in requests:
+
+```csharp
+public record RegionFields
+{
+    public IFieldValue<string> State   { get; init; } = Static("IL");
+    public IFieldValue<string> Country { get; init; } = Static("US");
+}
+
+public record AddressFields
+{
+    public IFieldValue<string>       Street { get; init; } = Static("123 Main St");
+    public IFieldValue<string>       City   { get; init; } = Static("Springfield");
+    public IFieldValue<RegionFields> Region { get; init; } = Static(new RegionFields());
+}
+
+public record UpdateUserAddressRequest() : WorkflowRequest<UpdateUserAddressResponse>("updateUserAddress", "sample-api")
+{
+    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
+    {
+        ["userId"] = From(ctx => ctx.Get<UserResponse>("createUser").Id)
+    };
+    public IFieldValue<AddressFields> Address { get; init; } = Static(new AddressFields());
+}
+```
+
+Overriding only what differs at the invocation site — unspecified fields keep their defaults:
+
+```csharp
+var result = await ExecuteAsync(
+    new UpdateUserAddressRequest() with
+    {
+        Address = Static(new AddressFields
+        {
+            City   = Static("Boston"),
+            Region = Static(new RegionFields { State = Static("MA") })
+        })
+    });
+
+Assert.Equal("Boston",      result.Address.City);
+Assert.Equal("123 Main St", result.Address.Street);  // default preserved
+Assert.Equal("MA",          result.Address.Region.State);
+Assert.Equal("US",          result.Address.Region.Country);  // default preserved
+```
+
 ### Building an array
 
 `BuildAsync` resolves all `IFieldValue<T>` properties immediately, appends the resolved dictionary to the accumulation, and returns a typed `TResponse` snapshot. `GetAccumulated<TItem>()` returns the accumulated `List<Dictionary<string, object?>>` of already-resolved values. Resolution happens once at build time — not again when the request is sent.
@@ -157,8 +232,6 @@ var order = await ExecuteAsync(new CreateOrderRequest());
 Assert.Equal("Deluxe Widget", widget.ProductName);  // TResponse — plain values, no IFieldValue
 Assert.Equal(3, widget.Quantity);
 ```
-
-`IFieldValue<T>` properties are resolved recursively. After resolving `IFieldValue<T>` → `T`, if `T` is a record with `IFieldValue<U>` properties, those are resolved too, producing a nested `Dictionary<string, object?>`. This applies to arbitrary depth. List elements are also recursed into.
 
 ---
 
