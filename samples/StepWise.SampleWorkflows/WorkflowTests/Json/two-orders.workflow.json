@@ -1,15 +1,52 @@
 {
   "name": "User_CanPlaceTwoOrders_EachGetsDistinctId",
   "steps": [
-    { "workflow": "SetupUser" },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" } } },
-    { "step": "createOrder", "captureAs": "firstOrder" },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" } } },
-    { "step": "createOrder", "captureAs": "secondOrder" }
+    {
+      "workflow": "SetupUser"
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Widget A"
+        }
+      }
+    },
+    {
+      "step": "createOrder",
+      "captureAs": "firstOrder"
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Widget B"
+        }
+      }
+    },
+    {
+      "step": "createOrder",
+      "captureAs": "secondOrder"
+    }
   ],
   "assertions": [
-    { "notEqual": ["firstOrder.id",      "secondOrder.id"] },
-    { "equal":    ["firstOrder.status",  "pending"] },
-    { "equal":    ["secondOrder.status", "pending"] }
+    {
+      "notEqual": [
+        "$firstOrder.id",
+        "$secondOrder.id"
+      ]
+    },
+    {
+      "equal": [
+        "$firstOrder.status",
+        "pending"
+      ]
+    },
+    {
+      "equal": [
+        "$secondOrder.status",
+        "pending"
+      ]
+    }
   ]
 }

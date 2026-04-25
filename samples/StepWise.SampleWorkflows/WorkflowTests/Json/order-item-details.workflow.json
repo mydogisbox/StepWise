@@ -1,20 +1,83 @@
 {
   "name": "PlacedOrder_ItemsCanBeInspectedByIndex",
   "steps": [
-    { "workflow": "SetupUser" },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" }, "quantity": { "static": 2 } } },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" }, "quantity": { "static": 5 } } },
-    { "step": "createOrder" },
-    { "step": "getOrder" }
+    {
+      "workflow": "SetupUser"
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Widget A"
+        },
+        "quantity": {
+          "static": 2
+        }
+      }
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Widget B"
+        },
+        "quantity": {
+          "static": 5
+        }
+      }
+    },
+    {
+      "step": "createOrder"
+    },
+    {
+      "step": "getOrder"
+    }
   ],
   "assertions": [
-    { "equal":    ["createOrder.status",               "pending"] },
-    { "equal":    ["createOrder.items[0].productName", "Widget A"] },
-    { "equal":    ["createOrder.items[1].productName", "Widget B"] },
-    { "notEmpty": "createOrder.items[0].productName" },
-    { "equal":    ["getOrder.items[0].productName",    "Widget A"] },
-    { "equal":    ["getOrder.items[1].productName",    "Widget B"] },
-    { "equal":    ["createOrder.id",                   "getOrder.id"] },
-    { "equal":    ["getOrder.items[?productName=Widget B].quantity", "5"] }
+    {
+      "equal": [
+        "$createOrder.status",
+        "pending"
+      ]
+    },
+    {
+      "equal": [
+        "$createOrder.items[0].productName",
+        "Widget A"
+      ]
+    },
+    {
+      "equal": [
+        "$createOrder.items[1].productName",
+        "Widget B"
+      ]
+    },
+    {
+      "notEmpty": "$createOrder.items[0].productName"
+    },
+    {
+      "equal": [
+        "$getOrder.items[0].productName",
+        "Widget A"
+      ]
+    },
+    {
+      "equal": [
+        "$getOrder.items[1].productName",
+        "Widget B"
+      ]
+    },
+    {
+      "equal": [
+        "$createOrder.id",
+        "$getOrder.id"
+      ]
+    },
+    {
+      "equal": [
+        "$getOrder.items[?productName=Widget B].quantity",
+        "5"
+      ]
+    }
   ]
 }

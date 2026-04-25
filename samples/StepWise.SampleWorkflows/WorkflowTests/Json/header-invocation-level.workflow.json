@@ -3,10 +3,19 @@
   "steps": [
     {
       "step": "echoHeaders",
-      "headers": { "x-invocation-header": { "static": "from-invocation" } }
+      "headers": {
+        "x-invocation-header": {
+          "static": "from-invocation"
+        }
+      }
     }
   ],
   "assertions": [
-    { "equal": ["echoHeaders.x-invocation-header", "from-invocation"] }
+    {
+      "equal": [
+        "$echoHeaders.x-invocation-header",
+        "from-invocation"
+      ]
+    }
   ]
 }

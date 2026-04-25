@@ -21,17 +21,7 @@ public static class HttpExecutor
     private static readonly HttpClient SharedClient =
         new(new HttpClientHandler { AllowAutoRedirect = false });
 
-    /// <summary>
-    /// Executes an HTTP request, returning the raw response body.
-    /// </summary>
-    /// <param name="baseUrl">Target base URL.</param>
-    /// <param name="method">HTTP method.</param>
-    /// <param name="path">Path template; <c>{placeholder}</c> segments are substituted from <paramref name="pathParams"/>.</param>
-    /// <param name="pathParams">Values substituted into <c>{placeholder}</c> segments of <paramref name="path"/>. Never sent in the body.</param>
-    /// <param name="queryParams">Key-value pairs appended to the URL as a query string.</param>
-    /// <param name="bodyFields">Fields serialized as the JSON request body (ignored for GET and DELETE).</param>
-    /// <param name="headers">HTTP headers sent with the request.</param>
-    public static async Task<string> SendAsync(
+    private static async Task<HttpResponseMessage> SendCoreAsync(
         string baseUrl,
         HttpMethod method,
         string path,
@@ -40,12 +30,10 @@ public static class HttpExecutor
         Dictionary<string, object?> bodyFields,
         Dictionary<string, object?> headers)
     {
-        // Substitute path parameters
         foreach (var (key, value) in pathParams)
             path = path.Replace($"{{{key}}}", Uri.EscapeDataString(value?.ToString() ?? ""),
                 StringComparison.OrdinalIgnoreCase);
 
-        // Append query string
         if (queryParams.Count > 0)
         {
             var qs = string.Join("&", queryParams.Select(kv =>
@@ -65,11 +53,34 @@ public static class HttpExecutor
         foreach (var (key, value) in headers)
             httpRequest.Headers.TryAddWithoutValidation(key, value?.ToString() ?? "");
 
-        var response = await SharedClient.SendAsync(httpRequest);
+        return await SharedClient.SendAsync(httpRequest);
+    }
+
+    /// <summary>
+    /// Executes an HTTP request, returning the raw response body.
+    /// </summary>
+    /// <param name="baseUrl">Target base URL.</param>
+    /// <param name="method">HTTP method.</param>
+    /// <param name="path">Path template; <c>{placeholder}</c> segments are substituted from <paramref name="pathParams"/>.</param>
+    /// <param name="pathParams">Values substituted into <c>{placeholder}</c> segments of <paramref name="path"/>. Never sent in the body.</param>
+    /// <param name="queryParams">Key-value pairs appended to the URL as a query string.</param>
+    /// <param name="bodyFields">Fields serialized as the JSON request body (ignored for GET and DELETE).</param>
+    /// <param name="headers">HTTP headers sent with the request.</param>
+    public static async Task<string> SendAsync(
+        string baseUrl,
+        HttpMethod method,
+        string path,
+        Dictionary<string, object?> pathParams,
+        Dictionary<string, object?> queryParams,
+        Dictionary<string, object?> bodyFields,
+        Dictionary<string, object?> headers)
+    {
+        var response = await SendCoreAsync(baseUrl, method, path, pathParams, queryParams, bodyFields, headers);
 
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync();
+            var url = response.RequestMessage!.RequestUri;
             var locationHint = response.Headers.Location is { } loc
                 ? $" Redirect location: {loc}."
                 : string.Empty;
@@ -79,6 +90,24 @@ public static class HttpExecutor
         }
 
         return await response.Content.ReadAsStringAsync();
+    }
+
+    /// <summary>
+    /// Executes an HTTP request, returning the status code and body regardless of success or failure.
+    /// Never throws on non-2xx responses.
+    /// </summary>
+    public static async Task<(int StatusCode, string Body)> SendRawAsync(
+        string baseUrl,
+        HttpMethod method,
+        string path,
+        Dictionary<string, object?> pathParams,
+        Dictionary<string, object?> queryParams,
+        Dictionary<string, object?> bodyFields,
+        Dictionary<string, object?> headers)
+    {
+        var response = await SendCoreAsync(baseUrl, method, path, pathParams, queryParams, bodyFields, headers);
+        var body = await response.Content.ReadAsStringAsync();
+        return ((int)response.StatusCode, body);
     }
 
     public static T Deserialize<T>(string json) =>

@@ -211,12 +211,42 @@ public class JsonWorkflowRunner
         if (invocation.CaptureRequestAs is { } requestKey)
             captures[requestKey] = bodyFields;
 
+        if (invocation.CaptureFullResponseAs is { } fullResponseKey)
+        {
+            var (statusCode, rawBody) = await HttpExecutor.SendRawAsync(
+                baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers);
+
+            object? parsedBody;
+            try
+            {
+                using var doc = JsonDocument.Parse(rawBody);
+                parsedBody = doc.RootElement.ValueKind == JsonValueKind.Array
+                    ? doc.RootElement.EnumerateArray()
+                        .Select(e => JsonValueResolver.JsonElementToObject(e))
+                        .ToList<object?>()
+                    : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(rawBody, HttpExecutor.JsonOptions);
+            }
+            catch
+            {
+                parsedBody = rawBody;
+            }
+
+            var fullResponse = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["status"] = statusCode,
+                ["body"] = parsedBody
+            };
+
+            captures[fullResponseKey] = fullResponse;
+            return new StepResult(fullResponseKey, fullResponse);
+        }
+
         var responseJson = await HttpExecutor.SendAsync(
             baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers);
 
-        using var doc = JsonDocument.Parse(responseJson);
-        object? captured = doc.RootElement.ValueKind == JsonValueKind.Array
-            ? doc.RootElement.EnumerateArray()
+        using var doc2 = JsonDocument.Parse(responseJson);
+        object? captured = doc2.RootElement.ValueKind == JsonValueKind.Array
+            ? doc2.RootElement.EnumerateArray()
                 .Select(e => JsonValueResolver.JsonElementToObject(e))
                 .ToList<object?>()
             : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson, HttpExecutor.JsonOptions);
@@ -398,8 +428,7 @@ public class JsonWorkflowRunner
     }
 
     private static object? ResolveAssertionExpr(string expr, Dictionary<string, object?> captures)
-        => (expr.Contains('.') || expr.Contains('[')) ? ResolveCapturePath(expr, captures)
-         : captures.TryGetValue(expr, out var v) ? v
+        => expr.StartsWith('$') ? ResolveCapturePath(expr[1..], captures)
          : (object?)expr;
 
     internal static object? ResolveCapturePath(string path, Dictionary<string, object?> captures)

@@ -1,7 +1,11 @@
 {
   "name": "SetupUser",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser" }
+    {
+      "step": "login"
+    },
+    {
+      "step": "createUser"
+    }
   ]
 }

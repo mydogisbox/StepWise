@@ -1,9 +1,24 @@
 {
   "name": "From_UsesDefault_WhenCaptureNotPresent",
   "steps": [
-    { "build": "addItem", "with": { "ownerId": { "from": "setSource.id", "default": { "static": "fallback-value" } } } }
+    {
+      "build": "addItem",
+      "with": {
+        "ownerId": {
+          "from": "setSource.id",
+          "default": {
+            "static": "fallback-value"
+          }
+        }
+      }
+    }
   ],
   "assertions": [
-    { "equal": ["addItem.ownerId", "fallback-value"] }
+    {
+      "equal": [
+        "$addItem.ownerId",
+        "fallback-value"
+      ]
+    }
   ]
 }

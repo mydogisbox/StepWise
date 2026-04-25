@@ -1,9 +1,16 @@
 {
   "name": "TargetHeaders_ReceivedByServer",
   "steps": [
-    { "step": "echoHeaders" }
+    {
+      "step": "echoHeaders"
+    }
   ],
   "assertions": [
-    { "equal": ["echoHeaders.x-target-header", "from-target"] }
+    {
+      "equal": [
+        "$echoHeaders.x-target-header",
+        "from-target"
+      ]
+    }
   ]
 }

@@ -1,9 +1,16 @@
 {
   "name": "StepHeaders_ReceivedByServer",
   "steps": [
-    { "step": "echoHeadersWithStepHeader" }
+    {
+      "step": "echoHeadersWithStepHeader"
+    }
   ],
   "assertions": [
-    { "equal": ["echoHeadersWithStepHeader.x-step-header", "from-step"] }
+    {
+      "equal": [
+        "$echoHeadersWithStepHeader.x-step-header",
+        "from-step"
+      ]
+    }
   ]
 }

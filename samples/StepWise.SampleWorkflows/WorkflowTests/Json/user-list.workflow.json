@@ -1,11 +1,22 @@
 {
   "name": "CreatedUser_AppearsInUserList",
   "steps": [
-    { "workflow": "SetupUser" },
-    { "step": "getUsers" }
+    {
+      "workflow": "SetupUser"
+    },
+    {
+      "step": "getUsers"
+    }
   ],
   "assertions": [
-    { "notEmpty": "getUsers" },
-    { "equal": ["getUsers[?email=createUser.email].email", "createUser.email"] }
+    {
+      "notEmpty": "$getUsers"
+    },
+    {
+      "equal": [
+        "$getUsers[?email=createUser.email].email",
+        "$createUser.email"
+      ]
+    }
   ]
 }

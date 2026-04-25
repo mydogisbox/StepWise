@@ -1,13 +1,28 @@
 {
   "name": "NestedWorkflow_PlaceOrder",
   "steps": [
-    { "workflow": "SetupUser" },
-    { "build": "addOrderItem" },
-    { "step": "createOrder" }
+    {
+      "workflow": "SetupUser"
+    },
+    {
+      "build": "addOrderItem"
+    },
+    {
+      "step": "createOrder"
+    }
   ],
   "assertions": [
-    { "equal":    ["createOrder.status", "pending"] },
-    { "notEmpty": "createUser.id" },
-    { "notEmpty": "login.token" }
+    {
+      "equal": [
+        "$createOrder.status",
+        "pending"
+      ]
+    },
+    {
+      "notEmpty": "$createUser.id"
+    },
+    {
+      "notEmpty": "$login.token"
+    }
   ]
 }

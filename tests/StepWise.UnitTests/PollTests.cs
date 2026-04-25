@@ -152,7 +152,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
-            Until = new AssertionDefinition { Equal = ["getStatus.status", "Completed"] },
+            Until = new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] },
             IntervalMs = 1,
             TimeoutMs = 5000
         });
@@ -189,7 +189,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
-            Until = new AssertionDefinition { Equal = ["getStatus.status", "Completed"] },
+            Until = new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] },
             IntervalMs = 1,
             TimeoutMs = 50
         });
@@ -211,14 +211,14 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
-            Until = new AssertionDefinition { Equal = ["getStatus.status", "Completed"] },
+            Until = new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] },
             IntervalMs = 1,
             TimeoutMs = 5000
         });
 
         var withAssertion = workflow with
         {
-            Assertions = [new AssertionDefinition { Equal = ["getStatus.status", "Completed"] }]
+            Assertions = [new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] }]
         };
 
         var result = await JsonWorkflowRunner.RunAsync(withAssertion, stepDefs, TestTargets);
@@ -286,8 +286,8 @@ public class CaptureRequestAsTests : IDisposable
             "test",
             [new StepInvocation { Step = "createItem", CaptureRequestAs = "itemRequest" }],
             [
-                new AssertionDefinition { Equal    = ["itemRequest.name",  "Widget"] },
-                new AssertionDefinition { NotEmpty = "itemRequest.price" }
+                new AssertionDefinition { Equal = ["$itemRequest.name", "Widget"] },
+                new AssertionDefinition { NotEmpty = "$itemRequest.price" }
             ]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
@@ -323,7 +323,7 @@ public class CaptureRequestAsTests : IDisposable
                 new StepInvocation { Step = "createItem",  CaptureRequestAs = "itemRequest" },
                 new StepInvocation { Step = "createOrder" }
             ],
-            [new AssertionDefinition { Equal = ["itemRequest.name", "Widget"] }]);
+            [new AssertionDefinition { Equal = ["$itemRequest.name", "Widget"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -348,8 +348,8 @@ public class CaptureRequestAsTests : IDisposable
             "test",
             [new StepInvocation { Step = "createItem", CaptureRequestAs = "itemRequest" }],
             [
-                new AssertionDefinition { Equal = ["createItem.id",      "resp-1"] },
-                new AssertionDefinition { Equal = ["itemRequest.name",   "Widget"] }
+                new AssertionDefinition { Equal = ["$createItem.id", "resp-1"] },
+                new AssertionDefinition { Equal = ["$itemRequest.name", "Widget"] }
             ]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);

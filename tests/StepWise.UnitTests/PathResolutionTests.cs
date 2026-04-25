@@ -152,7 +152,7 @@ public class BuildStepCaptureTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addItem" }],
-            [new AssertionDefinition { Equal = ["addItem.name", "Widget"] }]);
+            [new AssertionDefinition { Equal = ["$addItem.name", "Widget"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -173,7 +173,7 @@ public class BuildStepCaptureTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addItem", CaptureAs = "lastItem" }],
-            [new AssertionDefinition { Equal = ["lastItem.name", "Widget"] }]);
+            [new AssertionDefinition { Equal = ["$lastItem.name", "Widget"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -197,7 +197,7 @@ public class BuildStepCaptureTests
                 new StepInvocation { Build = "addItem" },
                 new StepInvocation { Build = "addItem" },
             ],
-            [new AssertionDefinition { NotEmpty = "items" }]);
+            [new AssertionDefinition { NotEmpty = "$items" }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -229,7 +229,7 @@ public class AssertionPathTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addOrder" }],
-            [new AssertionDefinition { Equal = ["orders[0].status", "shipped"] }]);
+            [new AssertionDefinition { Equal = ["$orders[0].status", "shipped"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -250,7 +250,7 @@ public class AssertionPathTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addOrder" }],
-            [new AssertionDefinition { Equal = ["orders[0].status", "shipped"] }]);
+            [new AssertionDefinition { Equal = ["$orders[0].status", "shipped"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.False(result.Passed);
@@ -272,7 +272,7 @@ public class AssertionPathTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addItem" }],
-            [new AssertionDefinition { NotEmpty = "items[0].id" }]);
+            [new AssertionDefinition { NotEmpty = "$items[0].id" }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -297,7 +297,7 @@ public class AssertionPathTests
                 new StepInvocation { Build = "addOrder" },
                 new StepInvocation { Build = "addOrder", With = new() { ["status"] = StaticField("shipped") } }
             ],
-            [new AssertionDefinition { Equal = ["orders[1].status", "shipped"] }]);
+            [new AssertionDefinition { Equal = ["$orders[1].status", "shipped"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -332,8 +332,8 @@ public class NestedStaticResolutionTests
             "test",
             [new StepInvocation { Build = "addItem" }],
             [
-                new AssertionDefinition { Equal = ["addItem.address.city",  "Boston"] },
-                new AssertionDefinition { Equal = ["addItem.address.state", "MA"] }
+                new AssertionDefinition { Equal = ["$addItem.address.city", "Boston"] },
+                new AssertionDefinition { Equal = ["$addItem.address.state", "MA"] }
             ]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
@@ -381,8 +381,8 @@ public class NestedStaticResolutionTests
             "test",
             [new StepInvocation { Build = "addItem" }],
             [
-                new AssertionDefinition { Equal = ["addItem.contact.primary.address.city",         "Boston"] },
-                new AssertionDefinition { Equal = ["addItem.contact.primary.address.region.state", "MA"] }
+                new AssertionDefinition { Equal = ["$addItem.contact.primary.address.city", "Boston"] },
+                new AssertionDefinition { Equal = ["$addItem.contact.primary.address.region.state", "MA"] }
             ]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
@@ -424,9 +424,9 @@ public class NestedStaticResolutionTests
                 }
             }],
             [
-                new AssertionDefinition { Equal = ["addItem.address.city",   "Boston"] },
-                new AssertionDefinition { Equal = ["addItem.address.state",  "IL"] },
-                new AssertionDefinition { NotEmpty = "addItem.address.street" }
+                new AssertionDefinition { Equal = ["$addItem.address.city", "Boston"] },
+                new AssertionDefinition { Equal = ["$addItem.address.state", "IL"] },
+                new AssertionDefinition { NotEmpty = "$addItem.address.street" }
             ]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
@@ -462,7 +462,7 @@ public class NestedStaticResolutionTests
                 new StepInvocation { Build = "setSource" },
                 new StepInvocation { Build = "addItem" }
             ],
-            [new AssertionDefinition { Equal = ["addItem.wrapper.inner", "dynamic-value"] }]);
+            [new AssertionDefinition { Equal = ["$addItem.wrapper.inner", "dynamic-value"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -489,7 +489,7 @@ public class CountAssertionTests
                 new StepInvocation { Build = "addItem" },
                 new StepInvocation { Build = "addItem" },
             ],
-            [new AssertionDefinition { Count = ["items", "3"] }]);
+            [new AssertionDefinition { Count = ["$items", "3"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, ItemStepDefs, []);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
@@ -501,7 +501,7 @@ public class CountAssertionTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addItem" }],
-            [new AssertionDefinition { Count = ["items", "3"] }]);
+            [new AssertionDefinition { Count = ["$items", "3"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, ItemStepDefs, []);
         Assert.False(result.Passed);
@@ -516,7 +516,7 @@ public class CountAssertionTests
         var workflow = new WorkflowDefinition(
             "test",
             [new StepInvocation { Build = "addItem" }],
-            [new AssertionDefinition { Count = ["items", "notanumber"] }]);
+            [new AssertionDefinition { Count = ["$items", "notanumber"] }]);
 
         var result = await JsonWorkflowRunner.RunAsync(workflow, ItemStepDefs, []);
         Assert.False(result.Passed);

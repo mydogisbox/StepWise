@@ -1,14 +1,48 @@
 {
   "name": "BuildStep_ResultIsAvailableAsCapture",
   "steps": [
-    { "workflow": "SetupUser" },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Widget A" } } },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Widget B" } }, "captureAs": "lastItem" },
-    { "step": "createOrder" }
+    {
+      "workflow": "SetupUser"
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Widget A"
+        }
+      }
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Widget B"
+        }
+      },
+      "captureAs": "lastItem"
+    },
+    {
+      "step": "createOrder"
+    }
   ],
   "assertions": [
-    { "equal": ["addOrderItem.productName", "Widget A"] },
-    { "equal": ["lastItem.productName",     "Widget B"] },
-    { "equal": ["createOrder.status",       "pending"] }
+    {
+      "equal": [
+        "$addOrderItem.productName",
+        "Widget A"
+      ]
+    },
+    {
+      "equal": [
+        "$lastItem.productName",
+        "Widget B"
+      ]
+    },
+    {
+      "equal": [
+        "$createOrder.status",
+        "pending"
+      ]
+    }
   ]
 }

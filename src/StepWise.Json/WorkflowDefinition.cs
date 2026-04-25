@@ -95,6 +95,14 @@ public record StepInvocation
     /// containing all resolved field values sent in the request body.
     /// </summary>
     public string? CaptureRequestAs { get; init; }
+
+    /// <summary>
+    /// When set, captures the full HTTP response (status code and body) under this key instead of
+    /// throwing on non-2xx. The captured value is <c>{ "status": int, "body": ... }</c>.
+    /// If not set, a non-2xx response throws as normal.
+    /// </summary>
+    public string? CaptureFullResponseAs { get; init; }
+
     public string? Workflow { get; init; }
 
     /// <summary>Per-invocation body field overrides. Merged over the step definition's defaults.</summary>

@@ -1,14 +1,43 @@
 {
   "name": "CreateUser_RequestFieldsAvailableViaCaptureRequestAs",
   "steps": [
-    { "step": "login" },
-    { "step": "createUser", "captureRequestAs": "userRequest",
-      "with": { "firstName": { "static": "Jane" }, "lastName": { "static": "Smith" } } }
+    {
+      "step": "login"
+    },
+    {
+      "step": "createUser",
+      "captureRequestAs": "userRequest",
+      "with": {
+        "firstName": {
+          "static": "Jane"
+        },
+        "lastName": {
+          "static": "Smith"
+        }
+      }
+    }
   ],
   "assertions": [
-    { "equal":    ["userRequest.firstName", "Jane"] },
-    { "equal":    ["userRequest.lastName",  "Smith"] },
-    { "equal":    ["userRequest.role",      "user"] },
-    { "notEmpty": "createUser.id" }
+    {
+      "equal": [
+        "$userRequest.firstName",
+        "Jane"
+      ]
+    },
+    {
+      "equal": [
+        "$userRequest.lastName",
+        "Smith"
+      ]
+    },
+    {
+      "equal": [
+        "$userRequest.role",
+        "user"
+      ]
+    },
+    {
+      "notEmpty": "$createUser.id"
+    }
   ]
 }

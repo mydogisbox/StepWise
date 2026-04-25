@@ -1,13 +1,44 @@
 {
   "name": "NewUser_CanPlaceOrder_WithSpecificItems",
   "steps": [
-    { "workflow": "SetupUser" },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Deluxe Widget" }, "quantity": { "static": 3 } } },
-    { "build": "addOrderItem", "with": { "productName": { "static": "Basic Widget" } } },
-    { "step": "createOrder" }
+    {
+      "workflow": "SetupUser"
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Deluxe Widget"
+        },
+        "quantity": {
+          "static": 3
+        }
+      }
+    },
+    {
+      "build": "addOrderItem",
+      "with": {
+        "productName": {
+          "static": "Basic Widget"
+        }
+      }
+    },
+    {
+      "step": "createOrder"
+    }
   ],
   "assertions": [
-    { "equal": ["createOrder.status", "pending"] },
-    { "count": ["createOrder.items", "2"] }
+    {
+      "equal": [
+        "$createOrder.status",
+        "pending"
+      ]
+    },
+    {
+      "count": [
+        "$createOrder.items",
+        "2"
+      ]
+    }
   ]
 }
