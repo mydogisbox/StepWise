@@ -3,8 +3,8 @@
 set -e
 
 API_URL="http://localhost:4200"
-API_PROJECT="samples/StepWise.SampleApi"
-PID_FILE="/tmp/stepwise-api.pid"
+API_PROJECT="samples/Walkthrough.SampleApi"
+PID_FILE="/tmp/walkthrough-api.pid"
 
 # Check if something is already on port 4200
 EXISTING_PID=$(lsof -ti tcp:4200 2>/dev/null || true)

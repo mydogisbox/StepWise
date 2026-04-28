@@ -1,6 +1,6 @@
-# StepWise — Claude Guidance
+# Walkthrough — Claude Guidance
 
-StepWise is a C# workflow testing library for APIs. It lets you write integration tests that express multi-step API workflows — login, create a user, place an order — with minimal noise. Each test only specifies what matters; everything else flows through sensible defaults.
+Walkthrough is a C# workflow testing library for APIs. It lets you write integration tests that express multi-step API workflows — login, create a user, place an order — with minimal noise. Each test only specifies what matters; everything else flows through sensible defaults.
 
 ---
 
@@ -15,7 +15,7 @@ Run tests after every change to verify nothing is broken.
 ## Architecture
 
 ```
-StepWise.Core
+Walkthrough.Core
 ├── WorkflowRequest<TResponse>     — base record for all requests
 ├── BuildableRequest               — non-generic marker base for array item builders
 ├── BuildableRequest<TResponse>    — generic base; TResponse is the resolved snapshot type returned by BuildAsync
@@ -24,12 +24,12 @@ StepWise.Core
 ├── FieldValues                    — Static(), Generated(), From() factories
 └── FieldValueResolver             — reflection-based resolver
 
-StepWise.Http
+Walkthrough.Http
 ├── HttpTarget                     — discovers steps by reflection, caches them
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
 └── HttpStep<TRequest, TResponse>  — declares Method, Path, Query, Headers
 
-StepWise.Json
+Walkthrough.Json
 ├── JsonWorkflowRunner             — pure engine: step execution, path resolution, assertion evaluation
 ├── JsonWorkflowTestBase           — thin xUnit wrapper over the runner
 ├── WorkflowDefinition             — all JSON model types
@@ -40,7 +40,7 @@ StepWise.Json
 Sample structure:
 
 ```
-samples/StepWise.SampleWorkflows/
+samples/Walkthrough.SampleWorkflows/
 ├── Requests/
 │   ├── Login.cs          — LoginResponse, LoginRequest, LoginStep
 │   ├── User.cs           — UserResponse, CreateUserRequest, CreateUserStep,
@@ -50,7 +50,7 @@ samples/StepWise.SampleWorkflows/
 │   │                        GetUsersByRoleRequest, GetUsersByRoleStep
 │   └── Order.cs          — OrderResponse, AddOrderItemResponse, AddOrderItem,
 │                            CreateOrderRequest, CreateOrderStep, GetOrderStep
-├── StepWiseTestBase.cs
+├── WalkthroughTestBase.cs
 └── WorkflowTests/
     ├── OrderWorkflowTests.cs          — C# tests
     └── Json/
@@ -127,7 +127,7 @@ public record SearchOrdersRequest() : WorkflowRequest<List<OrderResponse>>("sear
 
 ### Per-invocation overrides in C#
 
-`PathParams`, `Query`, and `Headers` can all be overridden per-call using the `with` expression, or via convenience parameters on `StepWiseTestBase.ExecuteAsync` (which accept `Dictionary<string, string>` and wrap values in `Static`):
+`PathParams`, `Query`, and `Headers` can all be overridden per-call using the `with` expression, or via convenience parameters on `WalkthroughTestBase.ExecuteAsync` (which accept `Dictionary<string, string>` and wrap values in `Static`):
 
 ```csharp
 // Convenience parameters — static strings only
@@ -152,7 +152,7 @@ All three can be combined on the same invocation. Override values are merged ove
 xUnit creates a new instance per class — each test gets a fresh `WorkflowContext` with no shared state:
 
 ```csharp
-public class PlacedOrder_CanBeRetrieved : StepWiseTestBase
+public class PlacedOrder_CanBeRetrieved : WalkthroughTestBase
 {
     [Fact]
     public async Task Test()
@@ -656,7 +656,7 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 - Supports dynamic field lookup values: `step.items[?id=other.id]` — the lookup value is resolved as a capture path when it contains `.` or `[`
 - Supports combinations: `step.items[?productName=Widget B].quantity`
 
-Assertion expressions containing `.` or `[` are resolved as paths. Bare strings with neither are treated as literals if not found as a capture key.
+Assertion expressions must be prefixed with `$` to be resolved as a capture path (e.g., `"$createOrder.id"`). Strings without `$` are treated as literals.
 
 ---
 

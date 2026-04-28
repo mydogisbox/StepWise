@@ -1,6 +1,6 @@
 ---
 name: reference_api_tests
-description: How to create test infrastructure for new APIs using StepWise workflows
+description: How to create test infrastructure for new APIs using Walkthrough workflows
 type: reference
 ---
 

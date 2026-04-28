@@ -38,9 +38,9 @@ Assert.Equal("pending", order.Status);
 
 ---
 
-## Library Name (suggestion)
+## Library Name
 
-**`ApiFlow`** — open to alternatives.
+**`Walkthrough`**
 
 ---
 
