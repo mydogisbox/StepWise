@@ -665,6 +665,7 @@ Assertion expressions must be prefixed with `$` to be resolved as a capture path
 | Source | Key | Type stored in captures |
 |--------|-----|------------------------|
 | HTTP step response | step name or `captureAs` | `Dictionary<string, JsonElement>` |
+| HTTP step full response (status + body) | `captureFullResponseAs` value | `Dictionary<string, object?>` with keys `"status"` (int) and `"body"` |
 | HTTP step request payload | `captureRequestAs` value | `Dictionary<string, object?>` |
 | Build step — individual result | step name or `captureAs` | `Dictionary<string, object?>` |
 | Build step — accumulation | `accumulateAs` value | `List<Dictionary<string, object?>>` |
@@ -681,6 +682,14 @@ By default, only the response is captured from HTTP steps. Use `captureRequestAs
 
 After this step, `userRequest.firstName` resolves to `"Jane"` and the response is still captured under `createUser` as usual. The request capture type is `Dictionary<string, object?>`.
 
+Use `captureFullResponseAs` to capture the raw HTTP response — including the status code — under a named key instead of throwing on non-2xx. The captured value is `{ "status": <int>, "body": <parsed body> }`. If the body is valid JSON it is parsed (object → `Dictionary<string, JsonElement>`, array → `List<object?>`); otherwise the raw string is stored. Normal 2xx responses can also use `captureFullResponseAs` — it simply adds the status field alongside the body:
+
+```json
+{ "step": "deleteUser", "captureFullResponseAs": "deleteResult" }
+```
+
+After this step, `deleteResult.status` is the HTTP status code (e.g. `204`) and `deleteResult.body` is the parsed response body. The response is **not** additionally captured under the step name — `captureFullResponseAs` replaces the normal capture for that invocation.
+
 ---
 
 ## Choosing a capture strategy
@@ -693,6 +702,7 @@ After this step, `userRequest.firstName` resolves to `"Jane"` and the response i
 | Same HTTP step runs multiple times; need to tell results apart | `captureAs` on each invocation: `"firstOrder"`, `"secondOrder"` |
 | Need a more readable alias for a response | `captureAs: "token"` instead of `login.token` |
 | Server doesn't echo a request field back; need it downstream | `captureRequestAs: "userRequest"` then `userRequest.email` |
+| Need the HTTP status code, or step may return non-2xx without throwing | `captureFullResponseAs: "result"` then `result.status` / `result.body.field` |
 | Inspect a specific item in a built collection | Accumulation index: `orderItems[0].productName` |
 | Reference the fields of the most recently built item | Build step name: `addOrderItem.productName` (overwritten each time the step builds without `captureAs`) |
 | Pin a specific built item independently of the accumulation | `captureAs` on the build invocation: `"specialItem"` then `specialItem.productName` |
@@ -700,6 +710,7 @@ After this step, `userRequest.firstName` resolves to `"Jane"` and the response i
 **Key rules:**
 - `captureAs` and the step name are mutually exclusive for a given invocation — `captureAs` wins if set.
 - `captureRequestAs` is additive — it doesn't replace the response capture; both are available.
+- `captureFullResponseAs` replaces the normal response capture for that invocation — the step name is not populated.
 - Build steps always write to the `accumulateAs` list regardless of `captureAs`.
 - Without `captureAs`, repeated builds of the same step overwrite the individual result capture; the accumulation still grows.
 
