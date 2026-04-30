@@ -389,7 +389,7 @@ Workflow invocations can override `pathParams` and `query` on a per-call basis, 
 - If `createUser` ran but `id` is missing or null, a `JsonWorkflowException` is thrown — the step ran, so a missing field is a bug, not an absent step.
 - The `default` is itself a field value definition and supports `static`, `generated`, `from`, or `template`.
 
-When `static` contains a JSON object, each property value is resolved recursively as a `FieldValueDefinition`. An object with a `static`, `from`, `generated`, or `template` key is treated as a field value definition; all other objects are structural nodes whose children are resolved the same way. This allows `from` and `generated` at any depth:
+When `static` contains a JSON object, each property value is resolved recursively as a `FieldValueDefinition`. An object with a `static`, `from`, `generated`, or `template` key is treated as a field value definition; all other objects are structural nodes whose children are resolved the same way. This applies to **arrays** too — each element is recursed into, so `from`, `template`, and `generated` objects inside a `static` array are also resolved. This allows `from` and `generated` at any depth, in both objects and arrays:
 
 ```json
 "contact": { "static": {
@@ -400,6 +400,14 @@ When `static` contains a JSON object, each property value is resolved recursivel
     }}
   }}
 }}
+```
+
+```json
+"tags": { "static": [{ "from": "step.tag" }, { "static": "fixed-tag" }] }
+```
+
+```json
+"pair": { "static": [{ "template": "{step.id}.field" }, "literal"] }
 ```
 
 ### Nested object defaults and partial overrides
