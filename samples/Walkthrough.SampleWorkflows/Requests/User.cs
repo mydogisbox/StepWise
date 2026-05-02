@@ -6,7 +6,7 @@ namespace Walkthrough.SampleWorkflows;
 
 public record UserResponse(string Id, string Email, string FirstName, string LastName, string Role);
 
-public record CreateUserRequest() : WorkflowRequest<UserResponse>("createUser", "sample-api")
+public record CreateUserRequest() : WorkflowRequest<UserResponse>("createUser")
 {
     public IFieldValue<string> Email     { get; init; } = Generated(() => $"user-{Guid.NewGuid():N}@test.com");
     public IFieldValue<string> FirstName { get; init; } = Static("Test");
@@ -56,7 +56,7 @@ public record ContactFields
     public IFieldValue<PrimaryFields> Primary { get; init; } = Static(new PrimaryFields());
 }
 
-public record UpdateUserAddressRequest() : WorkflowRequest<UpdateUserAddressResponse>("updateUserAddress", "sample-api")
+public record UpdateUserAddressRequest() : WorkflowRequest<UpdateUserAddressResponse>("updateUserAddress")
 {
     public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
     {
@@ -78,7 +78,7 @@ public class UpdateUserAddressStep : HttpStep<UpdateUserAddressRequest, UpdateUs
 
 // --- GetUsersByRole ---
 
-public record GetUsersByRoleRequest() : WorkflowRequest<List<UserResponse>>("getUsersByRole", "sample-api");
+public record GetUsersByRoleRequest() : WorkflowRequest<List<UserResponse>>("getUsersByRole");
 
 public class GetUsersByRoleStep : HttpStep<GetUsersByRoleRequest, List<UserResponse>>
 {

@@ -5,14 +5,17 @@ namespace Walkthrough.SampleWorkflows.WorkflowTests.Json;
 
 public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 {
-    protected override IReadOnlyList<string> RequestPaths =>
+    protected override IReadOnlyList<string> ContractPaths =>
     [
-        "Requests/auth.requests.json",
-        "Requests/order.requests.json",
-        "Requests/user.requests.json"
+        "WorkflowTests/Json/Contracts/auth.contracts.json",
+        "WorkflowTests/Json/Contracts/order.contracts.json",
+        "WorkflowTests/Json/Contracts/user.contracts.json"
     ];
 
-    protected override string TargetsPath => "WorkflowTests/Json/targets.json";
+    protected override IReadOnlyList<string> TargetPaths =>
+    [
+        "WorkflowTests/Json/sample-api.target.json"
+    ];
 
     protected override IReadOnlyList<string> SharedWorkflowPaths =>
     [
@@ -71,13 +74,15 @@ public class JsonOrderWorkflowTests : JsonWorkflowTestBase
 
 public class JsonHeaderTests : JsonWorkflowTestBase
 {
-    protected override IReadOnlyList<string> RequestPaths =>
+    protected override IReadOnlyList<string> ContractPaths =>
     [
-        "Requests/auth.requests.json",
-        "Requests/echo.requests.json"
+        "WorkflowTests/Json/Contracts/auth.contracts.json"
     ];
 
-    protected override string TargetsPath => "WorkflowTests/Json/targets.json";
+    protected override IReadOnlyList<string> TargetPaths =>
+    [
+        "WorkflowTests/Json/sample-api.target.json"
+    ];
 
     [Fact]
     public Task StepHeaders_ReceivedByServer() =>
@@ -91,12 +96,10 @@ public class JsonHeaderTests : JsonWorkflowTestBase
 
 public class JsonTargetHeaderTests : JsonWorkflowTestBase
 {
-    protected override IReadOnlyList<string> RequestPaths =>
+    protected override IReadOnlyList<string> TargetPaths =>
     [
-        "Requests/echo.requests.json"
+        "WorkflowTests/Json/sample-api-with-target-header.target.json"
     ];
-
-    protected override string TargetsPath => "WorkflowTests/Json/header-targets.json";
 
     [Fact]
     public Task TargetHeaders_ReceivedByServer() =>
@@ -105,9 +108,9 @@ public class JsonTargetHeaderTests : JsonWorkflowTestBase
 
 public class JsonFromDefaultTests : JsonWorkflowTestBase
 {
-    protected override IReadOnlyList<string> RequestPaths =>
+    protected override IReadOnlyList<string> ContractPaths =>
     [
-        "Requests/from-default.requests.json"
+        "WorkflowTests/Json/Contracts/from-default.contracts.json"
     ];
 
 

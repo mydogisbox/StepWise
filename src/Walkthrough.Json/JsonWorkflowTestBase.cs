@@ -7,11 +7,14 @@ namespace Walkthrough.Json;
 public abstract class JsonWorkflowTestBase
 {
     /// <summary>
-    /// Paths to .requests.json files, resolved relative to each workflow file's directory.
+    /// Paths to .contracts.json files, resolved relative to each workflow file's directory.
     /// </summary>
-    protected virtual IReadOnlyList<string> RequestPaths => [];
+    protected virtual IReadOnlyList<string> ContractPaths => [];
 
-    protected virtual string? TargetsPath => null;
+    /// <summary>
+    /// Paths to target files. Each file is a single target definition (base URL + per-step execution details).
+    /// </summary>
+    protected virtual IReadOnlyList<string> TargetPaths => [];
 
     /// <summary>
     /// Paths to .workflow.json files to pre-load as named sub-workflows.
@@ -21,7 +24,7 @@ public abstract class JsonWorkflowTestBase
 
     protected async Task RunWorkflowAsync(string workflowPath)
     {
-        var result = await JsonWorkflowRunner.RunAsync(workflowPath, RequestPaths, TargetsPath, SharedWorkflowPaths);
+        var result = await JsonWorkflowRunner.RunAsync(workflowPath, ContractPaths, TargetPaths, SharedWorkflowPaths);
         result.ThrowIfFailed();
     }
 }

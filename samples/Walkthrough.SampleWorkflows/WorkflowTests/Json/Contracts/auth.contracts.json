@@ -1,0 +1,10 @@
+{
+  "steps": {
+    "login": {
+      "defaults": {
+        "username": { "generated": "email" },
+        "password": { "static": "Password123!" }
+      }
+    }
+  }
+}

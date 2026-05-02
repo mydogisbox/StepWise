@@ -3,9 +3,9 @@ using Walkthrough.Core;
 namespace Walkthrough.Http;
 
 /// <summary>
-/// Declares the HTTP-specific details for executing a request.
+/// Declares the HTTP-specific execution details for a request type.
 /// Subclasses define Method, Path, and optionally Query and Headers.
-/// HttpTarget discovers and instantiates these automatically.
+/// Registered with an <see cref="HttpTarget"/> via Register().
 /// </summary>
 public abstract class HttpStep<TRequest, TResponse>
     where TRequest : WorkflowRequest<TResponse>

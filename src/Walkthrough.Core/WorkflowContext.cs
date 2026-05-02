@@ -2,35 +2,34 @@ namespace Walkthrough.Core;
 
 /// <summary>
 /// Carries shared state across all steps in a workflow execution.
-/// Holds named targets (URL + protocol) and captures step responses
-/// for use by subsequent steps via From(...).
+/// Holds a target resolver and captures step responses for use by subsequent steps via From(...).
 /// </summary>
 public class WorkflowContext
 {
-    private readonly Dictionary<string, ITarget> _targets = new();
+    private Func<string, ITarget>? _targetResolver;
     private readonly Dictionary<string, object> _captures = new();
     private readonly Dictionary<Type, List<object>> _accumulated = new();
 
     /// <summary>
-    /// Registers a named target — a combination of location and protocol.
+    /// Registers a function that resolves a step name to the target that should execute it.
     /// </summary>
-    public WorkflowContext WithTarget(string key, ITarget target)
+    public WorkflowContext WithTargetResolver(Func<string, ITarget> resolver)
     {
-        _targets[key] = target;
+        _targetResolver = resolver;
         return this;
     }
 
     /// <summary>
-    /// Executes a request against its registered target, captures the response,
+    /// Executes a request against the resolved target, captures the response,
     /// and returns it as a typed result.
     /// </summary>
     public async Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
     {
-        if (!_targets.TryGetValue(request.TargetKey, out var target))
+        if (_targetResolver is null)
             throw new WorkflowContextException(
-                $"No target registered for key '{request.TargetKey}'. " +
-                $"Available targets: [{string.Join(", ", _targets.Keys)}]");
+                "No target resolver registered. Call WithTargetResolver before executing steps.");
 
+        var target = _targetResolver(request.StepName);
         var response = await target.ExecuteAsync(request, this);
         _captures[request.StepName] = response!;
         return response;

@@ -16,7 +16,7 @@ public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
     public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
 }
 
-public record CreateOrderRequest() : WorkflowRequest<OrderResponse>("createOrder", "sample-api")
+public record CreateOrderRequest() : WorkflowRequest<OrderResponse>("createOrder")
 {
     public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
@@ -33,7 +33,7 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
         };
 }
 
-public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder", "sample-api")
+public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder")
 {
     public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
     {

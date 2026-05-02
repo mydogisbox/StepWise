@@ -13,7 +13,6 @@ public static class FieldValueResolver
     private static readonly HashSet<string> ExcludedProperties = new()
     {
         nameof(WorkflowRequest<object>.StepName),
-        nameof(WorkflowRequest<object>.TargetKey),
         nameof(WorkflowRequest<object>.PathParams),
         nameof(WorkflowRequest<object>.Query),
         nameof(WorkflowRequest<object>.Headers),

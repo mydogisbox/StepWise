@@ -140,7 +140,7 @@ public class BuildStepCaptureTests
     [Fact]
     public async Task BuildResult_IsAvailable_UnderStepName()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -161,7 +161,7 @@ public class BuildStepCaptureTests
     [Fact]
     public async Task BuildResult_CaptureAs_OverridesDefaultKey()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -182,7 +182,7 @@ public class BuildStepCaptureTests
     [Fact]
     public async Task BuildResult_StillAccumulates()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -217,7 +217,7 @@ public class AssertionPathTests
     [Fact]
     public async Task Assertion_Equal_ArrayIndex_Passes()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addOrder"] = new()
             {
@@ -238,7 +238,7 @@ public class AssertionPathTests
     [Fact]
     public async Task Assertion_Equal_ArrayIndex_Fails_WhenValueWrong()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addOrder"] = new()
             {
@@ -260,7 +260,7 @@ public class AssertionPathTests
     [Fact]
     public async Task Assertion_NotEmpty_ArrayIndex_Passes()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -281,7 +281,7 @@ public class AssertionPathTests
     [Fact]
     public async Task Assertion_Equal_SecondItemInArray_Passes()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addOrder"] = new()
             {
@@ -312,7 +312,7 @@ public class NestedStaticResolutionTests
     [Fact]
     public async Task Static_ObjectWithNestedFieldValueDefs_ResolvesRecursively()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -343,7 +343,7 @@ public class NestedStaticResolutionTests
     [Fact]
     public async Task Static_DeeplyNestedObjects_ResolveAllLevels()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -392,7 +392,7 @@ public class NestedStaticResolutionTests
     [Fact]
     public async Task Static_NestedWith_DeepMergesWithDefaults()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["addItem"] = new()
             {
@@ -436,7 +436,7 @@ public class NestedStaticResolutionTests
     [Fact]
     public async Task Static_NestedFrom_ResolvesAgainstCaptures()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["setSource"] = new()
             {
@@ -474,7 +474,7 @@ public class CountAssertionTests
     private static FieldValueDefinition StaticField(object value) =>
         new() { Static = JsonSerializer.SerializeToElement(value) };
 
-    private static Dictionary<string, StepDefinition> ItemStepDefs => new()
+    private static Dictionary<string, StepContractDefinition> ItemStepDefs => new()
     {
         ["addItem"] = new() { AccumulateAs = "items", Defaults = new() { ["name"] = StaticField("Widget") } }
     };

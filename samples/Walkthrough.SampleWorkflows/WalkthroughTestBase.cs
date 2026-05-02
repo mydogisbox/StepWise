@@ -1,4 +1,3 @@
-using System.Reflection;
 using Walkthrough.Core;
 using Walkthrough.Http;
 using static Walkthrough.Core.FieldValues;
@@ -14,7 +13,16 @@ public abstract class WalkthroughTestBase
     protected WalkthroughTestBase()
     {
         _context = new WorkflowContext()
-            .WithTarget("sample-api", new HttpTarget(SampleApiUrl, Assembly.GetExecutingAssembly()));
+            .WithTargetResolver(_ => new HttpTarget(SampleApiUrl)
+                .Register(new LoginStep())
+                .Register(new CreateUserStep())
+                .Register(new UpdateUserAddressStep())
+                .Register(new GetUsersByRoleStep())
+                .Register(new CreateOrderStep())
+                .Register(new GetOrderStep())
+                .Register(new EchoHeadersStep())
+                .Register(new EchoHeadersWithStepHeaderStep())
+                .Register(new EchoHeadersWithFromAuthStep()));
     }
 
     protected Task<TResponse> ExecuteAsync<TResponse>(

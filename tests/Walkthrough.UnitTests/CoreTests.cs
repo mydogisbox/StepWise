@@ -33,7 +33,7 @@ public class FieldValueTests
 public class WorkflowContextTests
 {
     private record FakeResponse();
-    private record FakeRequest() : WorkflowRequest<FakeResponse>("login", "test-api");
+    private record FakeRequest() : WorkflowRequest<FakeResponse>("login");
     private class FakeTarget : ITarget
     {
         public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
@@ -43,7 +43,7 @@ public class WorkflowContextTests
     [Fact]
     public async Task Get_ThrowsDescriptiveException_WhenStepNotFound()
     {
-        var context = new WorkflowContext().WithTarget("test-api", new FakeTarget());
+        var context = new WorkflowContext().WithTargetResolver(_ => new FakeTarget());
         await context.ExecuteAsync(new FakeRequest());
 
         var ex = Assert.Throws<WorkflowContextException>(
@@ -66,7 +66,7 @@ public class FieldValueResolverTests
     private record TestResponse;
     private class TestProtocol;
 
-    private record TestRequest<TProtocol>() : WorkflowRequest<TestResponse>("test", "test-api")
+    private record TestRequest<TProtocol>() : WorkflowRequest<TestResponse>("test")
     {
         public IFieldValue<string> Name  { get; init; } = Static("Alice");
         public IFieldValue<int>    Count { get; init; } = Static(42);
@@ -83,7 +83,7 @@ public class FieldValueResolverTests
         Assert.Equal("Alice", resolved["Name"]);
         Assert.Equal(42, resolved["Count"]);
         Assert.False(resolved.ContainsKey("StepName"));
-        Assert.False(resolved.ContainsKey("TargetKey"));
+        Assert.False(resolved.ContainsKey("StepName"));
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class RecursiveFieldValueTests
         public IFieldValue<string> Value { get; init; } = Static("default");
     }
 
-    private record Outer() : WorkflowRequest<object>("test", "test-api")
+    private record Outer() : WorkflowRequest<object>("test")
     {
         public IFieldValue<Inner> Nested { get; init; } = Static(new Inner());
     }
@@ -121,7 +121,7 @@ public class RecursiveFieldValueTests
         public IFieldValue<DeepInner> Inner { get; init; } = Static(new DeepInner());
     }
 
-    private record DeepOuter() : WorkflowRequest<object>("test", "test-api")
+    private record DeepOuter() : WorkflowRequest<object>("test")
     {
         public IFieldValue<MiddleLayer> Middle { get; init; } = Static(new MiddleLayer());
     }
@@ -165,7 +165,7 @@ public class FromDefaultTests
     private static FieldValueDefinition StaticField(object value) =>
         new() { Static = JsonSerializer.SerializeToElement(value) };
 
-    private static Dictionary<string, StepDefinition> StepDefs => new()
+    private static Dictionary<string, StepContractDefinition> StepDefs => new()
     {
         ["setUser"] = new() { AccumulateAs = "users", Defaults = new() { ["id"] = StaticField("user-123") } },
         ["addItem"] = new()
@@ -207,7 +207,7 @@ public class FromDefaultTests
     public async Task From_Throws_WhenRootPresentButFieldAbsent()
     {
         // setUser ran but has no "nonexistent" field — this is a bug, not a missing step
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["setUser"] = new() { AccumulateAs = "users", Defaults = new() { ["id"] = StaticField("user-123") } },
             ["addItem"] = new()
@@ -243,7 +243,7 @@ public class BuildableRequestAccumulationTests
         public IFieldValue<int>    Count { get; init; } = Static(1);
     }
 
-    private record OrderRequest() : WorkflowRequest<FakeResponse>("createOrder", "test-api")
+    private record OrderRequest() : WorkflowRequest<FakeResponse>("createOrder")
     {
         public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
     }
@@ -352,7 +352,7 @@ public class TemplateFieldValueTests
     [Fact]
     public async Task Template_UsedAsHeader_InBuildWorkflow()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var stepDefs = new Dictionary<string, StepContractDefinition>
         {
             ["setToken"] = new() { AccumulateAs = "tokens", Defaults = new() { ["token"] = StaticField("my-token") } },
             ["addItem"]  = new()
@@ -378,4 +378,78 @@ public class TemplateFieldValueTests
 
     private static FieldValueDefinition StaticField(object value) =>
         new() { Static = JsonSerializer.SerializeToElement(value) };
+}
+
+public class MultiTargetWorkflowTests
+{
+    private record TokenResponse(string Token);
+    private record UserResponse(string Id);
+
+    private record LoginRequest() : WorkflowRequest<TokenResponse>("login");
+
+    // Token field resolves from the login capture — produced by a different target.
+    private record CreateUserRequest() : WorkflowRequest<UserResponse>("createUser")
+    {
+        public IFieldValue<string> Token { get; init; } = From(ctx => ctx.Get<TokenResponse>("login").Token);
+    }
+
+    private class CountingFakeTarget<TResponse>(TResponse response) : ITarget
+    {
+        public int CallCount { get; private set; }
+        public Task<T> ExecuteAsync<T>(WorkflowRequest<T> request, WorkflowContext context)
+        {
+            CallCount++;
+            return Task.FromResult((T)(object)response!);
+        }
+    }
+
+    [Fact]
+    public async Task EachStep_RoutedToCorrectTarget()
+    {
+        var loginTarget = new CountingFakeTarget<TokenResponse>(new TokenResponse("abc"));
+        var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
+
+        var context = new WorkflowContext()
+            .WithTargetResolver(n => n == "login" ? (ITarget)loginTarget : userTarget);
+
+        await context.ExecuteAsync(new LoginRequest());
+        await context.ExecuteAsync(new CreateUserRequest());
+
+        Assert.Equal(1, loginTarget.CallCount);
+        Assert.Equal(1, userTarget.CallCount);
+    }
+
+    [Fact]
+    public async Task CapturesFromBothTargets_AreAccessible()
+    {
+        var loginTarget = new CountingFakeTarget<TokenResponse>(new TokenResponse("abc"));
+        var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
+
+        var context = new WorkflowContext()
+            .WithTargetResolver(n => n == "login" ? (ITarget)loginTarget : userTarget);
+
+        await context.ExecuteAsync(new LoginRequest());
+        await context.ExecuteAsync(new CreateUserRequest());
+
+        Assert.Equal("abc", context.Get<TokenResponse>("login").Token);
+        Assert.Equal("u1",  context.Get<UserResponse>("createUser").Id);
+    }
+
+    [Fact]
+    public async Task From_ResolvesCapture_ProducedByDifferentTarget()
+    {
+        var loginTarget = new CountingFakeTarget<TokenResponse>(new TokenResponse("abc"));
+        var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
+
+        var context = new WorkflowContext()
+            .WithTargetResolver(n => n == "login" ? (ITarget)loginTarget : userTarget);
+
+        await context.ExecuteAsync(new LoginRequest());
+
+        // Resolve the createUser request fields before executing — the Token From should
+        // reach across the target boundary and read the login capture.
+        var resolved = FieldValueResolver.Resolve(new CreateUserRequest(), context);
+
+        Assert.Equal("abc", resolved["Token"]);
+    }
 }

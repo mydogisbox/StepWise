@@ -11,7 +11,7 @@ namespace Walkthrough.UnitTests;
 public class WorkflowContextPollTests
 {
     private record StatusResponse(string Status);
-    private record GetStatusRequest() : WorkflowRequest<StatusResponse>("getStatus", "test-api");
+    private record GetStatusRequest() : WorkflowRequest<StatusResponse>("getStatus");
 
     private class FakeTarget : ITarget
     {
@@ -33,7 +33,7 @@ public class WorkflowContextPollTests
         var fake = new FakeTarget();
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var context = new WorkflowContext().WithTarget("test-api", fake);
+        var context = new WorkflowContext().WithTargetResolver(_ => fake);
         var result = await context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed");
 
         Assert.Equal("Completed", result.Status);
@@ -48,7 +48,7 @@ public class WorkflowContextPollTests
         fake.Enqueue(new StatusResponse("Pending"));
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var context = new WorkflowContext().WithTarget("test-api", fake);
+        var context = new WorkflowContext().WithTargetResolver(_ => fake);
         var result = await context.PollAsync(
             new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
 
@@ -62,7 +62,7 @@ public class WorkflowContextPollTests
         var fake = new FakeTarget();
         for (var i = 0; i < 10; i++) fake.Enqueue(new StatusResponse("Pending"));
 
-        var context = new WorkflowContext().WithTarget("test-api", fake);
+        var context = new WorkflowContext().WithTargetResolver(_ => fake);
         var ex = await Assert.ThrowsAsync<WorkflowContextException>(() =>
             context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed",
                 intervalMs: 10, timeoutMs: 50));
@@ -77,7 +77,7 @@ public class WorkflowContextPollTests
         fake.Enqueue(new StatusResponse("Pending"));
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var context = new WorkflowContext().WithTarget("test-api", fake);
+        var context = new WorkflowContext().WithTargetResolver(_ => fake);
         await context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
 
         Assert.Equal("Completed", context.Get<StatusResponse>("getStatus").Status);
@@ -126,20 +126,20 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         });
     }
 
-    private (WorkflowDefinition, Dictionary<string, StepDefinition>) BuildWorkflow(StepInvocation step)
+    private (WorkflowDefinition, Dictionary<string, StepContractDefinition>, List<TargetDefinition>) BuildWorkflow(StepInvocation step)
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var contracts = new Dictionary<string, StepContractDefinition>();
+        var targets = new List<TargetDefinition>
         {
-            ["getStatus"] = new StepDefinition { Target = "api", Method = "GET", Path = "/status" }
+            new()
+            {
+                BaseUrl = $"http://127.0.0.1:{_port}",
+                Steps = new() { ["getStatus"] = new TargetStepDefinition { Method = "GET", Path = "/status" } }
+            }
         };
-        var workflow = new WorkflowDefinition(
-            Name: "PollTest",
-            Steps: [step]);
-        return (workflow, stepDefs);
+        var workflow = new WorkflowDefinition(Name: "PollTest", Steps: [step]);
+        return (workflow, contracts, targets);
     }
-
-    private Dictionary<string, TargetDefinition> TestTargets =>
-        new(StringComparer.OrdinalIgnoreCase) { ["api"] = $"http://127.0.0.1:{_port}" };
 
     [Fact]
     public async Task Poll_ResolvesWhenConditionEventuallyMet()
@@ -149,7 +149,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             "{\"status\":\"Pending\"}",
             "{\"status\":\"Completed\"}");
 
-        var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
+        var (workflow, contracts, targets) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
             Until = new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] },
@@ -157,7 +157,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             TimeoutMs = 5000
         });
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, contracts, targets);
 
         Assert.True(result.Passed);
         Assert.Equal(3, _callCount[0]);
@@ -168,14 +168,14 @@ public class JsonWorkflowRunnerPollTests : IDisposable
     {
         ServeSequence("{\"status\":\"Completed\"}");
 
-        var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
+        var (workflow, contracts, targets) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
             IntervalMs = 1,
             TimeoutMs = 5000
         });
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, contracts, targets);
 
         Assert.True(result.Passed);
         Assert.Equal(1, _callCount[0]);
@@ -186,7 +186,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
     {
         ServeSequence("{\"status\":\"Pending\"}");
 
-        var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
+        var (workflow, contracts, targets) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
             Until = new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] },
@@ -195,7 +195,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
         });
 
         var ex = await Assert.ThrowsAsync<JsonWorkflowException>(() =>
-            JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets));
+            JsonWorkflowRunner.RunAsync(workflow, contracts, targets));
 
         Assert.Contains("getStatus", ex.Message);
         Assert.Contains("timed out", ex.Message);
@@ -208,7 +208,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             "{\"status\":\"Pending\"}",
             "{\"status\":\"Completed\"}");
 
-        var (workflow, stepDefs) = BuildWorkflow(new StepInvocation
+        var (workflow, contracts, targets) = BuildWorkflow(new StepInvocation
         {
             Poll = "getStatus",
             Until = new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] },
@@ -221,7 +221,7 @@ public class JsonWorkflowRunnerPollTests : IDisposable
             Assertions = [new AssertionDefinition { Equal = ["$getStatus.status", "Completed"] }]
         };
 
-        var result = await JsonWorkflowRunner.RunAsync(withAssertion, stepDefs, TestTargets);
+        var result = await JsonWorkflowRunner.RunAsync(withAssertion, contracts, targets);
 
         Assert.True(result.Passed);
         Assert.Empty(result.AssertionErrors);
@@ -263,23 +263,23 @@ public class CaptureRequestAsTests : IDisposable
 
     public void Dispose() => _listener.Stop();
 
-    private Dictionary<string, TargetDefinition> TestTargets =>
-        new(StringComparer.OrdinalIgnoreCase) { ["api"] = $"http://127.0.0.1:{_port}" };
-
     [Fact]
     public async Task CaptureRequestAs_StoresResolvedFields()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var contracts = new Dictionary<string, StepContractDefinition>
         {
             ["createItem"] = new()
             {
-                Target = "api", Method = "POST", Path = "/items",
                 Defaults = new()
                 {
                     ["name"]  = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") },
                     ["price"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement(9.99) }
                 }
             }
+        };
+        var targets = new List<TargetDefinition>
+        {
+            new() { BaseUrl = $"http://127.0.0.1:{_port}", Steps = new() { ["createItem"] = new() { Method = "POST", Path = "/items" } } }
         };
 
         var workflow = new WorkflowDefinition(
@@ -290,29 +290,33 @@ public class CaptureRequestAsTests : IDisposable
                 new AssertionDefinition { NotEmpty = "$itemRequest.price" }
             ]);
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, contracts, targets);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
     }
 
     [Fact]
     public async Task CaptureRequestAs_IsAvailableToSubsequentSteps()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var contracts = new Dictionary<string, StepContractDefinition>
         {
             ["createItem"] = new()
             {
-                Target = "api", Method = "POST", Path = "/items",
-                Defaults = new()
-                {
-                    ["name"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") }
-                }
+                Defaults = new() { ["name"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") } }
             },
             ["createOrder"] = new()
             {
-                Target = "api", Method = "POST", Path = "/orders",
-                Defaults = new()
+                Defaults = new() { ["itemName"] = new FieldValueDefinition { From = "itemRequest.name" } }
+            }
+        };
+        var targets = new List<TargetDefinition>
+        {
+            new()
+            {
+                BaseUrl = $"http://127.0.0.1:{_port}",
+                Steps = new()
                 {
-                    ["itemName"] = new FieldValueDefinition { From = "itemRequest.name" }
+                    ["createItem"]  = new() { Method = "POST", Path = "/items" },
+                    ["createOrder"] = new() { Method = "POST", Path = "/orders" }
                 }
             }
         };
@@ -325,23 +329,23 @@ public class CaptureRequestAsTests : IDisposable
             ],
             [new AssertionDefinition { Equal = ["$itemRequest.name", "Widget"] }]);
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, contracts, targets);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
     }
 
     [Fact]
     public async Task CaptureRequestAs_DoesNotAffectResponseCapture()
     {
-        var stepDefs = new Dictionary<string, StepDefinition>
+        var contracts = new Dictionary<string, StepContractDefinition>
         {
             ["createItem"] = new()
             {
-                Target = "api", Method = "POST", Path = "/items",
-                Defaults = new()
-                {
-                    ["name"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") }
-                }
+                Defaults = new() { ["name"] = new FieldValueDefinition { Static = JsonSerializer.SerializeToElement("Widget") } }
             }
+        };
+        var targets = new List<TargetDefinition>
+        {
+            new() { BaseUrl = $"http://127.0.0.1:{_port}", Steps = new() { ["createItem"] = new() { Method = "POST", Path = "/items" } } }
         };
 
         var workflow = new WorkflowDefinition(
@@ -352,7 +356,7 @@ public class CaptureRequestAsTests : IDisposable
                 new AssertionDefinition { Equal = ["$itemRequest.name", "Widget"] }
             ]);
 
-        var result = await JsonWorkflowRunner.RunAsync(workflow, stepDefs, TestTargets);
+        var result = await JsonWorkflowRunner.RunAsync(workflow, contracts, targets);
         Assert.True(result.Passed, string.Join(", ", result.AssertionErrors));
     }
 }

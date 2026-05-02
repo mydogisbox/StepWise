@@ -1,0 +1,28 @@
+{
+  "steps": {
+    "createUser": {
+      "defaults": {
+        "email":     { "generated": "email" },
+        "firstName": { "static": "Test" },
+        "lastName":  { "static": "User" },
+        "role":      { "static": "user" }
+      }
+    },
+    "updateUserAddress": {
+      "defaults": {
+        "contact": { "static": {
+          "primary": { "static": {
+            "address": { "static": {
+              "street":  { "static": "123 Main St" },
+              "city":    { "static": "Springfield" },
+              "region":  { "static": {
+                "state":   { "static": "IL" },
+                "country": { "static": "US" }
+              }}
+            }}
+          }}
+        }}
+      }
+    }
+  }
+}

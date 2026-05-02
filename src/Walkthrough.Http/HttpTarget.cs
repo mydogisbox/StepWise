@@ -5,38 +5,42 @@ namespace Walkthrough.Http;
 
 /// <summary>
 /// An execution target that sends requests over HTTP.
-/// Discovers the matching HttpStep for each request type by scanning provided assemblies.
-/// Step resolution is cached per request type.
+/// Steps are registered explicitly via <see cref="Register{TRequest,TResponse}"/>.
 /// </summary>
 public class HttpTarget : ITarget
 {
     private readonly string _baseUrl;
-    private readonly IEnumerable<Assembly> _assemblies;
-    private readonly Dictionary<Type, object> _stepCache = new();
     private readonly IReadOnlyDictionary<string, IFieldValue<string>> _headers;
+    private readonly IReadOnlyDictionary<Type, object> _steps;
 
-    public HttpTarget(string baseUrl, params Assembly[] assemblies)
+    public HttpTarget(string baseUrl)
     {
         _baseUrl = baseUrl.TrimEnd('/');
         _headers = new Dictionary<string, IFieldValue<string>>();
-        _assemblies = assemblies.Length > 0
-            ? assemblies
-            : [Assembly.GetCallingAssembly()];
+        _steps   = new Dictionary<Type, object>();
     }
 
     private HttpTarget(
         string baseUrl,
         IReadOnlyDictionary<string, IFieldValue<string>> headers,
-        IEnumerable<Assembly> assemblies)
+        IReadOnlyDictionary<Type, object> steps)
     {
         _baseUrl = baseUrl.TrimEnd('/');
         _headers = headers;
-        _assemblies = assemblies;
+        _steps   = steps;
     }
 
     /// <summary>Returns a new target that sends the given headers with every request.</summary>
     public HttpTarget WithHeaders(IReadOnlyDictionary<string, IFieldValue<string>> headers)
-        => new(_baseUrl, headers, _assemblies);
+        => new(_baseUrl, headers, _steps);
+
+    /// <summary>Returns a new target with the given step registered for its request type.</summary>
+    public HttpTarget Register<TRequest, TResponse>(HttpStep<TRequest, TResponse> step)
+        where TRequest : WorkflowRequest<TResponse>
+    {
+        var newSteps = new Dictionary<Type, object>(_steps) { [typeof(TRequest)] = step };
+        return new(_baseUrl, _headers, newSteps);
+    }
 
     public Task<TResponse> ExecuteAsync<TResponse>(
         WorkflowRequest<TResponse> request,
@@ -83,24 +87,11 @@ public class HttpTarget : ITarget
     private HttpStep<TRequest, TResponse> ResolveStep<TRequest, TResponse>(Type requestType)
         where TRequest : WorkflowRequest<TResponse>
     {
-        if (_stepCache.TryGetValue(requestType, out var cached))
-            return (HttpStep<TRequest, TResponse>)cached;
+        if (_steps.TryGetValue(requestType, out var step))
+            return (HttpStep<TRequest, TResponse>)step;
 
-        var stepType = _assemblies
-            .SelectMany(a => a.GetTypes())
-            .FirstOrDefault(t =>
-                !t.IsAbstract &&
-                t.BaseType is { IsGenericType: true } bt &&
-                bt.GetGenericTypeDefinition() == typeof(HttpStep<,>) &&
-                bt.GetGenericArguments()[0] == requestType);
-
-        if (stepType is null)
-            throw new HttpStepException(
-                $"No HttpStep<{requestType.Name}, {typeof(TResponse).Name}> found in the scanned assemblies. " +
-                $"Define a class that extends HttpStep<{requestType.Name}, {typeof(TResponse).Name}>.");
-
-        var step = (HttpStep<TRequest, TResponse>)Activator.CreateInstance(stepType)!;
-        _stepCache[requestType] = step;
-        return step;
+        throw new HttpStepException(
+            $"No step registered for {requestType.Name}. " +
+            $"Call .Register(new YourStep()) on the HttpTarget.");
     }
 }

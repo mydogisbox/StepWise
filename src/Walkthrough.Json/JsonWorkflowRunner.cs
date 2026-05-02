@@ -21,56 +21,74 @@ public class JsonWorkflowRunner
     // ── Loading ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Loads a workflow file and merges step definitions from <paramref name="requestPaths"/>
+    /// Loads a workflow file and merges step contracts from <paramref name="contractPaths"/>
     /// (resolved relative to the workflow file's directory when not absolute).
     /// </summary>
-    public static (WorkflowDefinition Workflow, Dictionary<string, StepDefinition> StepDefs) Load(
+    public static (WorkflowDefinition Workflow, Dictionary<string, StepContractDefinition> Contracts) Load(
         string workflowPath,
-        IReadOnlyList<string> requestPaths)
+        IReadOnlyList<string> contractPaths)
     {
         var workflowJson = File.ReadAllText(workflowPath);
         var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(workflowJson, JsonOptions)
             ?? throw new JsonWorkflowException($"Failed to deserialize workflow from '{workflowPath}'.");
 
         var workflowDir = Path.GetDirectoryName(Path.GetFullPath(workflowPath))!;
-        var stepDefs = LoadRequestFiles(requestPaths, workflowDir);
+        var contracts = LoadContractFiles(contractPaths, workflowDir);
 
-        return (workflow, stepDefs);
+        return (workflow, contracts);
     }
 
     /// <summary>
-    /// Loads a list of .requests.json files and merges their step definitions.
+    /// Loads a list of .contracts.json files and merges their step contract definitions.
     /// Paths are resolved relative to baseDir.
     /// </summary>
-    public static Dictionary<string, StepDefinition> LoadRequestFiles(
-        IReadOnlyList<string> requestPaths,
+    public static Dictionary<string, StepContractDefinition> LoadContractFiles(
+        IReadOnlyList<string> contractPaths,
         string baseDir)
     {
-        var merged = new Dictionary<string, StepDefinition>(StringComparer.OrdinalIgnoreCase);
+        var merged = new Dictionary<string, StepContractDefinition>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var relativePath in requestPaths)
+        foreach (var relativePath in contractPaths)
         {
             var fullPath = Path.IsPathRooted(relativePath)
                 ? relativePath
                 : Path.Combine(baseDir, relativePath);
 
             var json = File.ReadAllText(fullPath);
-            var requests = JsonSerializer.Deserialize<RequestsDefinition>(json, JsonOptions)
-                ?? throw new JsonWorkflowException($"Failed to deserialize requests from '{fullPath}'.");
+            var contracts = JsonSerializer.Deserialize<ContractsDefinition>(json, JsonOptions)
+                ?? throw new JsonWorkflowException($"Failed to deserialize contracts from '{fullPath}'.");
 
-            foreach (var (name, def) in requests.Steps)
+            foreach (var (name, def) in contracts.Steps)
                 merged[name] = def;
         }
 
         return merged;
     }
 
-    public static Dictionary<string, TargetDefinition> LoadTargets(string? targetsPath)
+    /// <summary>
+    /// Loads a list of target files. Each file is a single <see cref="TargetDefinition"/>.
+    /// Paths are resolved relative to baseDir.
+    /// </summary>
+    public static List<TargetDefinition> LoadTargetFiles(
+        IReadOnlyList<string> targetPaths,
+        string baseDir)
     {
-        if (targetsPath is null) return [];
-        var json = File.ReadAllText(targetsPath);
-        return JsonSerializer.Deserialize<Dictionary<string, TargetDefinition>>(json, JsonOptions)
-            ?? throw new JsonWorkflowException($"Failed to deserialize targets from '{targetsPath}'.");
+        var targets = new List<TargetDefinition>();
+
+        foreach (var relativePath in targetPaths)
+        {
+            var fullPath = Path.IsPathRooted(relativePath)
+                ? relativePath
+                : Path.Combine(baseDir, relativePath);
+
+            var json = File.ReadAllText(fullPath);
+            var target = JsonSerializer.Deserialize<TargetDefinition>(json, JsonOptions)
+                ?? throw new JsonWorkflowException($"Failed to deserialize target from '{fullPath}'.");
+
+            targets.Add(target);
+        }
+
+        return targets;
     }
 
     // ── Running ──────────────────────────────────────────────────────────────
@@ -92,18 +110,16 @@ public class JsonWorkflowRunner
     }
 
     /// <summary>
-    /// Executes a workflow given pre-loaded step definitions and target base URLs by name.
+    /// Executes a workflow given pre-loaded step contracts and target definitions.
     /// </summary>
     public static async Task<WorkflowResult> RunAsync(
         WorkflowDefinition workflow,
-        Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, TargetDefinition> targets,
+        Dictionary<string, StepContractDefinition> contracts,
+        List<TargetDefinition> targets,
         IReadOnlyDictionary<string, WorkflowDefinition>? namedWorkflows = null)
     {
-        var resolvedTargets = new Dictionary<string, TargetDefinition>(targets, StringComparer.OrdinalIgnoreCase);
-
         var captures = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        var stepResults = await ExecuteStepsAsync(workflow.Steps, stepDefs, resolvedTargets, captures, namedWorkflows ?? new Dictionary<string, WorkflowDefinition>());
+        var stepResults = await ExecuteStepsAsync(workflow.Steps, contracts, targets, captures, namedWorkflows ?? new Dictionary<string, WorkflowDefinition>());
 
         var assertionErrors = workflow.Assertions is not null
             ? EvaluateAssertions(workflow.Assertions, captures)
@@ -118,28 +134,34 @@ public class JsonWorkflowRunner
     }
 
     /// <summary>
-    /// Loads the workflow and request and targets files from disk.
+    /// Loads the workflow, contract, and target files from disk.
     /// </summary>
     public static Task<WorkflowResult> RunAsync(
         string workflowPath,
-        IReadOnlyList<string> requestPaths,
-        string? targetsPath = null,
+        IReadOnlyList<string> contractPaths,
+        IReadOnlyList<string>? targetPaths = null,
         IReadOnlyList<string>? sharedWorkflowPaths = null)
     {
-        var (workflow, stepDefs) = Load(workflowPath, requestPaths);
-        var targets = LoadTargets(targetsPath);
+        var baseDir = Directory.GetCurrentDirectory();
+        var workflowJson = File.ReadAllText(workflowPath);
+        var workflow = JsonSerializer.Deserialize<WorkflowDefinition>(workflowJson, JsonOptions)
+            ?? throw new JsonWorkflowException($"Failed to deserialize workflow from '{workflowPath}'.");
+        var contracts = LoadContractFiles(contractPaths, baseDir);
+        var targets = targetPaths is { Count: > 0 }
+            ? LoadTargetFiles(targetPaths, baseDir)
+            : [];
         var namedWorkflows = sharedWorkflowPaths is { Count: > 0 }
             ? LoadNamedWorkflows(sharedWorkflowPaths)
             : new Dictionary<string, WorkflowDefinition>();
-        return RunAsync(workflow, stepDefs, targets, namedWorkflows);
+        return RunAsync(workflow, contracts, targets, namedWorkflows);
     }
 
     // ── Step execution ───────────────────────────────────────────────────────
 
     private static async Task<List<StepResult>> ExecuteStepsAsync(
         IEnumerable<StepInvocation> steps,
-        Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, TargetDefinition> targets,
+        Dictionary<string, StepContractDefinition> contracts,
+        List<TargetDefinition> targets,
         Dictionary<string, object?> captures,
         IReadOnlyDictionary<string, WorkflowDefinition> namedWorkflows)
     {
@@ -147,13 +169,13 @@ public class JsonWorkflowRunner
         foreach (var invocation in steps)
         {
             if (invocation.Step is not null)
-                results.Add(await ExecuteStepAsync(invocation, stepDefs, targets, captures));
+                results.Add(await ExecuteStepAsync(invocation, contracts, targets, captures));
             else if (invocation.Build is not null)
-                results.Add(BuildItem(invocation, stepDefs, captures));
+                results.Add(BuildItem(invocation, contracts, captures));
             else if (invocation.Poll is not null)
-                results.Add(await PollStepAsync(invocation, stepDefs, targets, captures));
+                results.Add(await PollStepAsync(invocation, contracts, targets, captures));
             else if (invocation.Workflow is not null)
-                results.AddRange(await ExecuteNestedWorkflowAsync(invocation.Workflow, stepDefs, targets, captures, namedWorkflows));
+                results.AddRange(await ExecuteNestedWorkflowAsync(invocation.Workflow, contracts, targets, captures, namedWorkflows));
             else
                 throw new JsonWorkflowException("Each step must have 'step', 'build', 'poll', or 'workflow'.");
         }
@@ -162,8 +184,8 @@ public class JsonWorkflowRunner
 
     private static async Task<List<StepResult>> ExecuteNestedWorkflowAsync(
         string workflowRef,
-        Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, TargetDefinition> targets,
+        Dictionary<string, StepContractDefinition> contracts,
+        List<TargetDefinition> targets,
         Dictionary<string, object?> captures,
         IReadOnlyDictionary<string, WorkflowDefinition> namedWorkflows)
     {
@@ -178,35 +200,35 @@ public class JsonWorkflowRunner
             nested = JsonSerializer.Deserialize<WorkflowDefinition>(json, JsonOptions)
                 ?? throw new JsonWorkflowException($"Failed to deserialize nested workflow from '{workflowRef}'.");
         }
-        return await ExecuteStepsAsync(nested.Steps, stepDefs, targets, captures, namedWorkflows);
+        return await ExecuteStepsAsync(nested.Steps, contracts, targets, captures, namedWorkflows);
     }
 
     private static async Task<StepResult> ExecuteStepAsync(
         StepInvocation invocation,
-        Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, TargetDefinition> targets,
+        Dictionary<string, StepContractDefinition> contracts,
+        List<TargetDefinition> targets,
         Dictionary<string, object?> captures)
     {
         var stepName = invocation.Step!;
 
-        if (!stepDefs.TryGetValue(stepName, out var stepDef))
-            throw new JsonWorkflowException(
-                $"Step '{stepName}' not found in loaded request files. " +
-                $"Available: [{string.Join(", ", stepDefs.Keys)}]");
+        contracts.TryGetValue(stepName, out var contract);
 
-        if (!targets.TryGetValue(stepDef.Target, out var target))
+        var targetDef = targets.FirstOrDefault(t => t.Steps?.ContainsKey(stepName) == true);
+        if (targetDef is null)
             throw new JsonWorkflowException(
-                $"Target '{stepDef.Target}' not found. " +
-                $"Available: [{string.Join(", ", targets.Keys)}]");
+                $"Step '{stepName}' not found in any loaded target. " +
+                $"Loaded targets cover: [{string.Join(", ", targets.SelectMany(t => t.Steps?.Keys ?? (IEnumerable<string>)[]))}]");
 
-        var pathParams  = ResolveFieldGroup(stepDef.PathParams, invocation.PathParams, captures);
-        var queryParams = ResolveFieldGroup(stepDef.Query,       invocation.Query,      captures);
-        var headers     = ResolveFieldGroup(target.Headers,      null,                  captures);
-        foreach (var kv in ResolveFieldGroup(stepDef.Headers, invocation.Headers, captures))
+        var targetStep = targetDef.Steps![stepName];
+
+        var pathParams  = ResolveFieldGroup(targetStep.PathParams, invocation.PathParams, captures);
+        var queryParams = ResolveFieldGroup(targetStep.Query,       invocation.Query,      captures);
+        var headers     = ResolveFieldGroup(targetDef.Headers,      null,                  captures);
+        foreach (var kv in ResolveFieldGroup(targetStep.Headers, invocation.Headers, captures))
             headers[kv.Key] = kv.Value;
-        var bodyFields  = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
-        var baseUrl = target.BaseUrl;
-        var method = new HttpMethod(stepDef.Method.ToUpper());
+        var bodyFields  = MergeAndResolve(contract?.Defaults, invocation.With, captures);
+        var baseUrl = targetDef.BaseUrl;
+        var method = new HttpMethod(targetStep.Method.ToUpper());
 
         if (invocation.CaptureRequestAs is { } requestKey)
             captures[requestKey] = bodyFields;
@@ -214,7 +236,7 @@ public class JsonWorkflowRunner
         if (invocation.CaptureFullResponseAs is { } fullResponseKey)
         {
             var (statusCode, rawBody) = await HttpExecutor.SendRawAsync(
-                baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers);
+                baseUrl, method, targetStep.Path, pathParams, queryParams, bodyFields, headers);
 
             object? parsedBody;
             try
@@ -242,7 +264,7 @@ public class JsonWorkflowRunner
         }
 
         var responseJson = await HttpExecutor.SendAsync(
-            baseUrl, method, stepDef.Path, pathParams, queryParams, bodyFields, headers);
+            baseUrl, method, targetStep.Path, pathParams, queryParams, bodyFields, headers);
 
         using var doc2 = JsonDocument.Parse(responseJson);
         object? captured = doc2.RootElement.ValueKind == JsonValueKind.Array
@@ -259,20 +281,20 @@ public class JsonWorkflowRunner
 
     private static StepResult BuildItem(
         StepInvocation invocation,
-        Dictionary<string, StepDefinition> stepDefs,
+        Dictionary<string, StepContractDefinition> contracts,
         Dictionary<string, object?> captures)
     {
         var buildName = invocation.Build!;
 
-        if (!stepDefs.TryGetValue(buildName, out var stepDef))
+        if (!contracts.TryGetValue(buildName, out var contract))
             throw new JsonWorkflowException(
-                $"Build step '{buildName}' not found in loaded request files.");
+                $"Build step '{buildName}' not found in loaded contract files.");
 
-        var accumulationKey = stepDef.AccumulateAs
+        var accumulationKey = contract.AccumulateAs
             ?? throw new JsonWorkflowException(
-                $"Build step '{buildName}' must specify 'accumulateAs' in its step definition.");
+                $"Build step '{buildName}' must specify 'accumulateAs' in its contract definition.");
 
-        var resolvedFields = MergeAndResolve(stepDef.Defaults, invocation.With, captures);
+        var resolvedFields = MergeAndResolve(contract.Defaults, invocation.With, captures);
         if (!captures.TryGetValue(accumulationKey, out var existing) ||
             existing is not List<Dictionary<string, object?>> list)
         {
@@ -289,8 +311,8 @@ public class JsonWorkflowRunner
 
     private static async Task<StepResult> PollStepAsync(
         StepInvocation invocation,
-        Dictionary<string, StepDefinition> stepDefs,
-        Dictionary<string, TargetDefinition> targets,
+        Dictionary<string, StepContractDefinition> contracts,
+        List<TargetDefinition> targets,
         Dictionary<string, object?> captures)
     {
         var stepName = invocation.Poll!;
@@ -299,7 +321,7 @@ public class JsonWorkflowRunner
 
         while (true)
         {
-            var result = await ExecuteStepAsync(executeInvocation, stepDefs, targets, captures);
+            var result = await ExecuteStepAsync(executeInvocation, contracts, targets, captures);
 
             if (invocation.Until is null || EvaluateAssertions([invocation.Until], captures).Count == 0)
                 return result;

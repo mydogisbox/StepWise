@@ -1,0 +1,18 @@
+{
+  "steps": {
+    "addOrderItem": {
+      "accumulateAs": "orderItems",
+      "defaults": {
+        "productName": { "static": "Widget" },
+        "quantity":    { "static": 1 },
+        "unitPrice":   { "static": 9.99 }
+      }
+    },
+    "createOrder": {
+      "defaults": {
+        "userId": { "from": "createUser.id" },
+        "items":  { "from": "orderItems" }
+      }
+    }
+  }
+}

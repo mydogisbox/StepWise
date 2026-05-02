@@ -12,29 +12,33 @@ public record WorkflowDefinition(
     List<AssertionDefinition>? Assertions = null);
 
 /// <summary>
-/// The content of a .requests.json file — a dictionary of named step definitions.
+/// The content of a .contracts.json file — a dictionary of named step contract definitions.
 /// </summary>
-public record RequestsDefinition(
-    Dictionary<string, StepDefinition> Steps
+public record ContractsDefinition(
+    Dictionary<string, StepContractDefinition> Steps
 );
 
 /// <summary>
-/// A target entry in the targets file — a base URL with optional default headers.
+/// A target definition — base URL, optional target-level headers, and per-step HTTP execution details.
 /// </summary>
 public record TargetDefinition
 {
     public string BaseUrl { get; init; } = "";
+
+    /// <summary>Headers sent with every request to this target.</summary>
     public Dictionary<string, FieldValueDefinition>? Headers { get; init; }
+
+    /// <summary>HTTP execution details for each step this target handles.</summary>
+    public Dictionary<string, TargetStepDefinition>? Steps { get; init; }
 
     public static implicit operator TargetDefinition(string url) => new() { BaseUrl = url };
 }
 
 /// <summary>
-/// Defines how a named step is executed — method, path, target, and defaults.
+/// HTTP execution details for a single step within a target — method, path, routing, and step-level headers.
 /// </summary>
-public record StepDefinition
+public record TargetStepDefinition
 {
-    public string Target { get; init; } = "";
     public string Method { get; init; } = "POST";
     public string Path   { get; init; } = "";
 
@@ -53,7 +57,13 @@ public record StepDefinition
 
     /// <summary>HTTP headers sent with every invocation of this step. Merged over target-level headers.</summary>
     public Dictionary<string, FieldValueDefinition>? Headers { get; init; }
+}
 
+/// <summary>
+/// The transport-agnostic contract for a named step — default body field values and optional accumulation key.
+/// </summary>
+public record StepContractDefinition
+{
     /// <summary>Default field values sent in the request body.</summary>
     public Dictionary<string, FieldValueDefinition>? Defaults { get; init; }
 

@@ -1,0 +1,71 @@
+{
+  "baseUrl": "http://localhost:4200",
+  "steps": {
+    "login": {
+      "method": "POST",
+      "path": "/auth/login"
+    },
+    "createUser": {
+      "method": "POST",
+      "path": "/users",
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      }
+    },
+    "createOrder": {
+      "method": "POST",
+      "path": "/orders",
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      }
+    },
+    "getOrder": {
+      "method": "GET",
+      "path": "/orders/{orderId}",
+      "pathParams": {
+        "orderId": { "from": "createOrder.id" }
+      },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      }
+    },
+    "getUsers": {
+      "method": "GET",
+      "path": "/users",
+      "query": {
+        "role": { "static": "user" }
+      },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      }
+    },
+    "updateUserAddress": {
+      "method": "PUT",
+      "path": "/users/{userId}/address",
+      "pathParams": {
+        "userId": { "from": "createUser.id" }
+      },
+      "headers": {
+        "Authorization": { "template": "Bearer {login.token}" }
+      }
+    },
+    "echoHeaders": {
+      "method": "GET",
+      "path": "/echo/headers"
+    },
+    "echoHeadersWithStepHeader": {
+      "method": "GET",
+      "path": "/echo/headers",
+      "headers": {
+        "x-step-header": { "static": "from-step" }
+      }
+    },
+    "echoHeadersWithTemplateAuth": {
+      "method": "GET",
+      "path": "/echo/headers",
+      "headers": {
+        "authorization": { "template": "Bearer {login.token}" }
+      }
+    }
+  }
+}

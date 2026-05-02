@@ -1,3 +1,7 @@
+using System.Text;
+using System.Text.Json;
+using Walkthrough.Core;
+using Walkthrough.Http;
 using Walkthrough.SampleWorkflows;
 using static Walkthrough.Core.FieldValues;
 using Xunit;
@@ -173,5 +177,51 @@ public class FromHeader_ConstructsBearerToken_ReceivedByServer : WalkthroughTest
         var echo = await ExecuteAsync(new EchoHeadersWithFromAuthRequest());
 
         Assert.StartsWith("Bearer ", echo["authorization"]);
+    }
+}
+
+// Demonstrates plugging a custom ITarget — a plain function wrapping an HttpClient call —
+// into the resolver alongside a regular HttpTarget for the remaining steps.
+public class Login_ViaCustomTarget_CanPlaceOrder
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    private class DirectLoginTarget(string baseUrl) : ITarget
+    {
+        private static readonly HttpClient _http = new();
+        private static readonly JsonSerializerOptions _readOptions = new() { PropertyNameCaseInsensitive = true };
+
+        public async Task<TResponse> ExecuteAsync<TResponse>(
+            WorkflowRequest<TResponse> request, WorkflowContext context)
+        {
+            var fields = FieldValueResolver.Resolve(request, context);
+            var content = new StringContent(
+                JsonSerializer.Serialize(fields), Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync($"{baseUrl}/auth/login", content);
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<TResponse>(json, _readOptions)!;
+        }
+    }
+
+    [Fact]
+    public async Task Test()
+    {
+        var httpTarget = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new CreateOrderStep());
+
+        var context = new WorkflowContext()
+            .WithTargetResolver(stepName => stepName == "login"
+                ? (ITarget)new DirectLoginTarget(SampleApiUrl)
+                : httpTarget);
+
+        await context.ExecuteAsync(new LoginRequest());
+        await context.ExecuteAsync(new CreateUserRequest());
+        await context.BuildAsync(new AddOrderItem());
+        var order = await context.ExecuteAsync(new CreateOrderRequest());
+
+        Assert.Equal("pending", order.Status);
+        Assert.Single(order.Items);
     }
 }

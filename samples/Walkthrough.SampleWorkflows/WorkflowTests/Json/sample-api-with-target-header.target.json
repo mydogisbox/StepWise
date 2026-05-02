@@ -1,0 +1,26 @@
+{
+  "baseUrl": "http://localhost:4200",
+  "headers": {
+    "x-target-header": { "static": "from-target" }
+  },
+  "steps": {
+    "echoHeaders": {
+      "method": "GET",
+      "path": "/echo/headers"
+    },
+    "echoHeadersWithStepHeader": {
+      "method": "GET",
+      "path": "/echo/headers",
+      "headers": {
+        "x-step-header": { "static": "from-step" }
+      }
+    },
+    "echoHeadersWithTemplateAuth": {
+      "method": "GET",
+      "path": "/echo/headers",
+      "headers": {
+        "authorization": { "template": "Bearer {login.token}" }
+      }
+    }
+  }
+}
