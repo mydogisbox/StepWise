@@ -180,6 +180,49 @@ public class FromHeader_ConstructsBearerToken_ReceivedByServer : WalkthroughTest
     }
 }
 
+// Demonstrates overriding MapBody to explicitly control which fields are sent in the HTTP body.
+// Useful when field names need transforming, or only a subset should be sent.
+public class MapBody_ExplicitFieldMapping_WorksCorrectly
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    private class ExplicitCreateUserStep : HttpStep<CreateUserRequest, UserResponse>
+    {
+        public override HttpMethod Method => HttpMethod.Post;
+        public override string Path => "/users";
+        public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
+            new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            };
+
+        public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
+        {
+            ["Email"]     = resolvedFields["Email"],
+            ["FirstName"] = resolvedFields["FirstName"],
+            ["LastName"]  = resolvedFields["LastName"],
+            ["Role"]      = resolvedFields["Role"],
+        };
+    }
+
+    [Fact]
+    public async Task Test()
+    {
+        var target = new HttpTarget(SampleApiUrl)
+            .Register(new LoginStep())
+            .Register(new ExplicitCreateUserStep());
+
+        var context = new WorkflowContext()
+            .WithTargetResolver(_ => target);
+
+        await context.ExecuteAsync(new LoginRequest());
+        var user = await context.ExecuteAsync(new CreateUserRequest());
+
+        Assert.NotEmpty(user.Id);
+        Assert.Equal("Test", user.FirstName);
+    }
+}
+
 // Demonstrates plugging a custom ITarget — a plain function wrapping an HttpClient call —
 // into the resolver alongside a regular HttpTarget for the remaining steps.
 public class Login_ViaCustomTarget_CanPlaceOrder
