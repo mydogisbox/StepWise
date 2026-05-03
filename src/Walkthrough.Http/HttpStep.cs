@@ -26,4 +26,34 @@ public abstract class HttpStep<TRequest, TResponse>
     /// </summary>
     public virtual IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
         new Dictionary<string, IFieldValue<string>>();
+
+    /// <summary>
+    /// Maps already-resolved request fields to the HTTP body.
+    /// Default: pass all resolved fields through unchanged.
+    /// Override to rename, filter, or transform fields before they are serialized.
+    /// </summary>
+    public virtual Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields)
+        => resolvedFields;
+
+    internal async Task<TResponse> RunAsync(
+        string baseUrl,
+        Dictionary<string, object?> resolvedFields,
+        Dictionary<string, object?> pathParams,
+        Dictionary<string, object?> requestQueryOverrides,
+        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, object?> requestHeaders,
+        WorkflowContext context)
+    {
+        var query = FieldValueResolver.ResolveGroup(Query, context);
+        foreach (var kv in requestQueryOverrides) query[kv.Key] = kv.Value;
+
+        var headers = new Dictionary<string, object?>(targetHeaders);
+        foreach (var kv in FieldValueResolver.ResolveGroup(Headers, context))
+            headers[kv.Key] = kv.Value;
+        foreach (var kv in requestHeaders) headers[kv.Key] = kv.Value;
+
+        var body = MapBody(resolvedFields);
+        var json = await HttpExecutor.SendAsync(baseUrl, Method, Path, pathParams, query, body, headers);
+        return HttpExecutor.Deserialize<TResponse>(json);
+    }
 }

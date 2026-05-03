@@ -27,7 +27,7 @@ Walkthrough.Core
 Walkthrough.Http
 ├── HttpTarget                     — sends requests over HTTP; steps registered explicitly via Register()
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
-└── HttpStep<TRequest, TResponse>  — declares Method, Path, Query, Headers for one request type
+└── HttpStep<TRequest, TResponse>  — declares Method, Path, Query, Headers, and MapBody for one request type
 
 Walkthrough.Json
 ├── JsonWorkflowRunner             — pure engine: step execution, path resolution, assertion evaluation
@@ -99,6 +99,14 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
         {
             ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
         };
+
+    // MapBody is optional — the default passes all resolved fields through unchanged.
+    // Override to rename, filter, or transform fields before serialization.
+    public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
+    {
+        ["UserId"] = resolvedFields["UserId"],
+        ["Items"]  = resolvedFields["Items"],
+    };
 }
 ```
 

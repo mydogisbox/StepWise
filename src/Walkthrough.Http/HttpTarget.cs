@@ -58,30 +58,15 @@ public class HttpTarget : ITarget
         WorkflowContext context)
         where TRequest : WorkflowRequest<TResponse>
     {
-        var step = ResolveStep<TRequest, TResponse>(typeof(TRequest));
-        var pathParams  = FieldValueResolver.ResolveGroup(request.PathParams, context);
-        var queryParams = FieldValueResolver.ResolveGroup(step.Query, context);
-        foreach (var kv in FieldValueResolver.ResolveGroup(request.Query, context))
-            queryParams[kv.Key] = kv.Value;
-        var bodyFields  = FieldValueResolver.Resolve(request, context);
+        var step           = ResolveStep<TRequest, TResponse>(typeof(TRequest));
+        var resolvedFields = FieldValueResolver.Resolve(request, context);
+        var pathParams     = FieldValueResolver.ResolveGroup(request.PathParams, context);
+        var queryOverrides = FieldValueResolver.ResolveGroup(request.Query, context);
+        var targetHeaders  = FieldValueResolver.ResolveGroup(_headers, context);
+        var requestHeaders = FieldValueResolver.ResolveGroup(request.Headers, context);
 
-        // Headers: target → step → request (each layer wins over the one before)
-        var headers = FieldValueResolver.ResolveGroup(_headers, context);
-        foreach (var kv in FieldValueResolver.ResolveGroup(step.Headers, context))
-            headers[kv.Key] = kv.Value;
-        foreach (var kv in FieldValueResolver.ResolveGroup(request.Headers, context))
-            headers[kv.Key] = kv.Value;
-
-        var responseJson = await HttpExecutor.SendAsync(
-            _baseUrl,
-            step.Method,
-            step.Path,
-            pathParams,
-            queryParams,
-            bodyFields,
-            headers);
-
-        return HttpExecutor.Deserialize<TResponse>(responseJson);
+        return await step.RunAsync(
+            _baseUrl, resolvedFields, pathParams, queryOverrides, targetHeaders, requestHeaders, context);
     }
 
     private HttpStep<TRequest, TResponse> ResolveStep<TRequest, TResponse>(Type requestType)
