@@ -269,7 +269,7 @@ Assert.Equal("US",          result.Address.Region.Country);  // default preserve
 
 ### Building an array
 
-`BuildAsync` resolves all `IFieldValue<T>` properties immediately, appends the resolved dictionary to the accumulation, and returns a typed `TResponse` snapshot. `GetAccumulated<TItem>()` returns the accumulated `List<Dictionary<string, object?>>` of already-resolved values. Resolution happens once at build time — not again when the request is sent.
+`BuildAsync` resolves all `IFieldValue<T>` properties immediately, appends the resolved dictionary to the accumulation, and returns a typed `TResponse` snapshot. `GetAccumulated<TItem>()` returns the accumulated `List<Dictionary<string, object?>>` of already-resolved values and **clears the accumulation** — subsequent calls return an empty list until more items are built. Resolution happens once at build time — not again when the request is sent.
 
 `BuildAsync` returns `TResponse`, so callers can reference resolved values (including generated ones) directly:
 
