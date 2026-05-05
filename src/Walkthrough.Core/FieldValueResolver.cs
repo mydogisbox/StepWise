@@ -42,7 +42,7 @@ public static class FieldValueResolver
         BuildableRequest item,
         WorkflowContext context)
         => ResolveProperties(item, context,
-            new HashSet<string> { "EqualityContract" },
+            new HashSet<string> { "EqualityContract", nameof(BuildableRequest.AccumulationKey) },
             t => t == typeof(BuildableRequest));
 
     private static Dictionary<string, object?> ResolveProperties(

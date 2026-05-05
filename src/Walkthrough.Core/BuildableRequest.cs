@@ -3,7 +3,15 @@ namespace Walkthrough.Core;
 /// <summary>
 /// Marker base for buildable request items. Extend BuildableRequest&lt;TResponse&gt; instead.
 /// </summary>
-public abstract record BuildableRequest;
+public abstract record BuildableRequest
+{
+    /// <summary>
+    /// The type used as the accumulation key in WorkflowContext.
+    /// Defaults to the runtime type. Override on a polymorphic base to accumulate all subtypes together:
+    /// <c>public override Type AccumulationKey =&gt; typeof(MyBaseItem);</c>
+    /// </summary>
+    public virtual Type AccumulationKey => GetType();
+}
 
 /// <summary>
 /// A pure data record that accumulates into the WorkflowContext without making an API call.

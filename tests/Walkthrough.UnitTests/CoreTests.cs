@@ -292,6 +292,48 @@ public class BuildableRequestAccumulationTests
         Assert.Equal("Gadget", second["Name"]);
         Assert.Equal(5, second["Count"]);
     }
+
+    [Fact]
+    public async Task StaticFactoryVariants_AccumulateUnderSameType()
+    {
+        var context = new WorkflowContext();
+        await context.BuildAsync(new LineItem() with { Name = Static("Widget") });
+        await context.BuildAsync(new LineItem() with { Name = Static("Gadget") });
+
+        var items = context.GetAccumulated<LineItem>();
+
+        Assert.Equal(2, items.Count);
+        Assert.Equal("Widget", items[0]["Name"]);
+        Assert.Equal("Gadget", items[1]["Name"]);
+    }
+
+    private record BaseItemResponse(string Kind);
+    private abstract record BaseItem() : BuildableRequest<BaseItemResponse>
+    {
+        public override Type AccumulationKey => typeof(BaseItem);
+    }
+    private record AlphaItem() : BaseItem
+    {
+        public IFieldValue<string> Kind { get; init; } = Static("alpha");
+    }
+    private record BetaItem() : BaseItem
+    {
+        public IFieldValue<string> Kind { get; init; } = Static("beta");
+    }
+
+    [Fact]
+    public async Task AccumulationKey_Override_PullsSubtypesIntoBaseTypeBucket()
+    {
+        var context = new WorkflowContext();
+        await context.BuildAsync(new AlphaItem());
+        await context.BuildAsync(new BetaItem());
+
+        var items = context.GetAccumulated<BaseItem>();
+
+        Assert.Equal(2, items.Count);
+        Assert.Equal("alpha", items[0]["Kind"]);
+        Assert.Equal("beta",  items[1]["Kind"]);
+    }
 }
 
 public class TemplateFieldValueTests

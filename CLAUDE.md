@@ -282,6 +282,51 @@ Assert.Equal("Deluxe Widget", widget.ProductName);  // TResponse — plain value
 Assert.Equal(3, widget.Quantity);
 ```
 
+### Accumulating multiple variants
+
+When all variants share the same fields, use static factory methods on the base record. Every instance is the same concrete type, so `GetAccumulated<AddOrderItem>()` retrieves all of them with no extra configuration:
+
+```csharp
+public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
+{
+    public IFieldValue<string>  ProductName { get; init; } = Static("Widget");
+    public IFieldValue<int>     Quantity    { get; init; } = Static(1);
+    public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
+
+    public static AddOrderItem Deluxe() => new() with { ProductName = Static("Deluxe Widget"), UnitPrice = Static(49.99m) };
+    public static AddOrderItem Basic()  => new() with { ProductName = Static("Basic Widget") };
+}
+```
+
+```csharp
+await BuildAsync(AddOrderItem.Deluxe());
+await BuildAsync(AddOrderItem.Basic());
+var order = await ExecuteAsync(new CreateOrderRequest()); // sees both items
+```
+
+When variants have genuinely different fields, use subtypes and override `AccumulationKey` on the base to pull them all into the same bucket:
+
+```csharp
+public abstract record OrderItem() : BuildableRequest<OrderItemResponse>
+{
+    public override Type AccumulationKey => typeof(OrderItem);
+}
+
+public record PhysicalItem() : OrderItem
+{
+    public IFieldValue<string> ProductName     { get; init; } = Static("Widget");
+    public IFieldValue<string> ShippingAddress { get; init; } = Static("123 Main St");
+}
+
+public record DigitalItem() : OrderItem
+{
+    public IFieldValue<string> ProductName { get; init; } = Static("E-Book");
+    public IFieldValue<string> DownloadUrl { get; init; } = Static("https://example.com/download");
+}
+```
+
+`BuildAsync(new PhysicalItem())` and `BuildAsync(new DigitalItem())` both accumulate under `typeof(OrderItem)`, so `GetAccumulated<OrderItem>()` retrieves both.
+
 ---
 
 ## JSON style

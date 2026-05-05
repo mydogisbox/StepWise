@@ -75,7 +75,7 @@ public class WorkflowContext
     /// </summary>
     public Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
     {
-        var runtimeType = item.GetType();
+        var runtimeType = item.AccumulationKey;
         if (!_accumulated.TryGetValue(runtimeType, out var list))
         {
             list = new List<object>();

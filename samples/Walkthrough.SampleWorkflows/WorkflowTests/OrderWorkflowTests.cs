@@ -223,6 +223,31 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
     }
 }
 
+// Demonstrates AccumulationKey: PhysicalItem and DigitalItem have genuinely different fields
+// (ShippingAddress vs DownloadUrl), so they use subtypes rather than static factory methods.
+// Both accumulate under OrderLineItem because AccumulationKey is overridden on the base.
+public class MixedItemTypes_AccumulateUnderBaseType : WalkthroughTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        await ExecuteAsync(new LoginRequest());
+        await ExecuteAsync(new CreateUserRequest());
+
+        await BuildAsync(new PhysicalItem() with { ProductName = Static("Physical Widget") });
+        await BuildAsync(new DigitalItem()  with { ProductName = Static("Premium E-Book") });
+
+        var order = await ExecuteAsync(new CreateOrderRequest() with
+        {
+            Items = From(ctx => ctx.GetAccumulated<OrderLineItem>())
+        });
+
+        Assert.Equal(2,                 order.Items.Count);
+        Assert.Equal("Physical Widget", order.Items[0].ProductName);
+        Assert.Equal("Premium E-Book",  order.Items[1].ProductName);
+    }
+}
+
 // Demonstrates plugging a custom ITarget — a plain function wrapping an HttpClient call —
 // into the resolver alongside a regular HttpTarget for the remaining steps.
 public class Login_ViaCustomTarget_CanPlaceOrder
