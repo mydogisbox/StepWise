@@ -1,11 +1,10 @@
-using System.Reflection;
 using Walkthrough.Core;
 
 namespace Walkthrough.Http;
 
 /// <summary>
 /// An execution target that sends requests over HTTP.
-/// Steps are registered explicitly via <see cref="Register{TRequest,TResponse}"/>.
+/// Register request types with their steps via Register() before use.
 /// </summary>
 public class HttpTarget : ITarget
 {
@@ -20,8 +19,7 @@ public class HttpTarget : ITarget
         _steps   = new Dictionary<Type, object>();
     }
 
-    private HttpTarget(
-        string baseUrl,
+    private HttpTarget(string baseUrl,
         IReadOnlyDictionary<string, IFieldValue<string>> headers,
         IReadOnlyDictionary<Type, object> steps)
     {
@@ -34,9 +32,9 @@ public class HttpTarget : ITarget
     public HttpTarget WithHeaders(IReadOnlyDictionary<string, IFieldValue<string>> headers)
         => new(_baseUrl, headers, _steps);
 
-    /// <summary>Returns a new target with the given step registered for its request type.</summary>
+    /// <summary>Registers a step to handle requests of type TRequest.</summary>
     public HttpTarget Register<TRequest, TResponse>(HttpStep<TRequest, TResponse> step)
-        where TRequest : WorkflowRequest<TResponse>
+        where TRequest : HttpWorkflowRequest<TResponse>
     {
         var newSteps = new Dictionary<Type, object>(_steps) { [typeof(TRequest)] = step };
         return new(_baseUrl, _headers, newSteps);
@@ -46,37 +44,16 @@ public class HttpTarget : ITarget
         WorkflowRequest<TResponse> request,
         WorkflowContext context)
     {
-        var executeMethod = typeof(HttpTarget)
-            .GetMethod(nameof(ExecuteTypedAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
-            .MakeGenericMethod(request.GetType(), typeof(TResponse));
+        if (request is not HttpWorkflowRequest<TResponse> httpRequest)
+            throw new HttpStepException(
+                $"HttpTarget requires an HttpWorkflowRequest. Got '{request.GetType().Name}'.");
 
-        return (Task<TResponse>)executeMethod.Invoke(this, [request, context])!;
-    }
+        if (!_steps.TryGetValue(httpRequest.GetType(), out var step))
+            throw new HttpStepException(
+                $"No step registered for '{httpRequest.GetType().Name}'. " +
+                $"Call .Register(new YourStep()) on the HttpTarget.");
 
-    private async Task<TResponse> ExecuteTypedAsync<TRequest, TResponse>(
-        TRequest request,
-        WorkflowContext context)
-        where TRequest : WorkflowRequest<TResponse>
-    {
-        var step           = ResolveStep<TRequest, TResponse>(typeof(TRequest));
-        var resolvedFields = FieldValueResolver.Resolve(request, context);
-        var pathParams     = FieldValueResolver.ResolveGroup(request.PathParams, context);
-        var queryOverrides = FieldValueResolver.ResolveGroup(request.Query, context);
-        var targetHeaders  = FieldValueResolver.ResolveGroup(_headers, context);
-        var requestHeaders = FieldValueResolver.ResolveGroup(request.Headers, context);
-
-        return await step.RunAsync(
-            _baseUrl, resolvedFields, pathParams, queryOverrides, targetHeaders, requestHeaders, context);
-    }
-
-    private HttpStep<TRequest, TResponse> ResolveStep<TRequest, TResponse>(Type requestType)
-        where TRequest : WorkflowRequest<TResponse>
-    {
-        if (_steps.TryGetValue(requestType, out var step))
-            return (HttpStep<TRequest, TResponse>)step;
-
-        throw new HttpStepException(
-            $"No step registered for {requestType.Name}. " +
-            $"Call .Register(new YourStep()) on the HttpTarget.");
+        var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
+        return ((IHttpStep<TResponse>)step).RunAsync(_baseUrl, httpRequest, targetHeaders, context);
     }
 }

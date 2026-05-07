@@ -4,6 +4,18 @@ Walkthrough is a C# workflow testing library for APIs. It lets you write integra
 
 ---
 
+## Philosophy
+
+**Tests should express consumer capabilities, not API mechanics.**
+
+A test named `NewUser_CanPlaceOrder` describes an interaction — something a consumer of this system is able to do. The test structure reflects that: set up the actor, perform the interaction, assert the outcome. The HTTP calls, request bodies, and response shapes are implementation details of the interaction, not the point of the test.
+
+**Tests highlight what they are testing and nothing else.**
+
+A test that verifies an order is created with two specific items should say exactly that — and nothing about the email address used to log in, the user's role, or the product's default price. Every field specified in a test is a claim that this field matters to this test. Defaults exist so that claim stays true. The same applies to values that flow between steps — if an order needs the user ID from a prior step, reference it rather than hardcoding it. A hardcoded value is a silent claim that the specific value matters, when usually only the dependency does.
+
+---
+
 ## Running tests
 
 Always use `./test.sh`. It starts the sample API, runs all test projects, and tears the API down. Do not run `dotnet test` directly — integration tests depend on the API being up.
@@ -16,7 +28,7 @@ Run tests after every change to verify nothing is broken.
 
 ```
 Walkthrough.Core
-├── WorkflowRequest<TResponse>     — base record for all requests
+├── WorkflowRequest<TResponse>     — transport-agnostic base record; carries only StepName
 ├── BuildableRequest               — non-generic marker base for array item builders
 ├── BuildableRequest<TResponse>    — generic base; TResponse is the resolved snapshot type returned by BuildAsync
 ├── WorkflowContext                — holds target resolver, captures, accumulations
@@ -25,6 +37,7 @@ Walkthrough.Core
 └── FieldValueResolver             — reflection-based resolver
 
 Walkthrough.Http
+├── HttpWorkflowRequest<TResponse> — base record for HTTP requests; adds PathParams, Query, Headers
 ├── HttpTarget                     — sends requests over HTTP; steps registered explicitly via Register()
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
 └── HttpStep<TRequest, TResponse>  — declares Method, Path, Query, Headers, and MapBody for one request type
@@ -67,6 +80,47 @@ samples/Walkthrough.SampleWorkflows/
 
 ## C# style
 
+### Field value factories
+
+Three factories are available via `using static Walkthrough.Core.FieldValues`:
+
+- `Static(value)` — returns the same value every time. The value is captured once at construction.
+- `Generated(Func<T> factory)` — invokes the factory each time the field is resolved. Use for values that must be unique per resolution or per test run.
+- `From(Func<WorkflowContext, T> selector)` — reads from the context at resolution time. Use for values that come from a prior step's captured response.
+
+```csharp
+public IFieldValue<string> Id      { get; init; } = Generated(() => Guid.NewGuid().ToString());
+public IFieldValue<string> Email   { get; init; } = Generated(() => $"user-{Guid.NewGuid():N}@example.com");
+public IFieldValue<string> Name    { get; init; } = Generators.RandomName(); // Generators returns Generated(...)
+public IFieldValue<string> Token   { get; init; } = From(ctx => ctx.Get<LoginResponse>("login").Token);
+public IFieldValue<string> BaseUrl { get; init; } = Static("http://localhost:5020");
+```
+
+`Generated` accepts any `Func<T>` — there is no built-in generator list in C#. That constraint only applies to the JSON `{ "generated": "guid" }` syntax.
+
+---
+
+### Field value rule
+
+Properties on `WorkflowRequest` and `BuildableRequest` subclasses that can be overridden must be `IFieldValue<T>`. A raw `{ get; init; }` property bypasses resolution and cannot participate in the field value system:
+
+```csharp
+// Wrong — looks overridable but bypasses resolution
+public string CommandType { get; init; } = "CreateTarget";
+
+// Right
+public IFieldValue<string> CommandType { get; init; } = Static("CreateTarget");
+```
+
+A raw property with no `init` is fine for fields that are intentionally fixed — a discriminator that should never change:
+
+```csharp
+// Fine — not overridable by design
+public string CommandType { get; } = "CreateTarget";
+```
+
+---
+
 ### Request file layout
 
 Response type, request record, and step class live in one file per API concept:
@@ -84,7 +138,7 @@ public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
     public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
 }
 
-public record CreateOrderRequest() : WorkflowRequest<OrderResponse>("createOrder")
+public record CreateOrderRequest() : HttpWorkflowRequest<OrderResponse>("createOrder")
 {
     public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
@@ -115,7 +169,7 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 Override `PathParams` for `{placeholder}` substitution and `Query` for query string parameters. Both are excluded from the request body:
 
 ```csharp
-public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder")
+public record GetOrderRequest() : HttpWorkflowRequest<OrderResponse>("getOrder")
 {
     public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
     {
@@ -123,7 +177,7 @@ public record GetOrderRequest() : WorkflowRequest<OrderResponse>("getOrder")
     };
 }
 
-public record SearchOrdersRequest() : WorkflowRequest<List<OrderResponse>>("searchOrders")
+public record SearchOrdersRequest() : HttpWorkflowRequest<List<OrderResponse>>("searchOrders")
 {
     public override IReadOnlyDictionary<string, IFieldValue<string>> Query { get; init; } = new Dictionary<string, IFieldValue<string>>
     {
@@ -238,7 +292,7 @@ public record AddressFields
     public IFieldValue<RegionFields> Region { get; init; } = Static(new RegionFields());
 }
 
-public record UpdateUserAddressRequest() : WorkflowRequest<UpdateUserAddressResponse>("updateUserAddress")
+public record UpdateUserAddressRequest() : HttpWorkflowRequest<UpdateUserAddressResponse>("updateUserAddress")
 {
     public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
     {
@@ -271,7 +325,16 @@ Assert.Equal("US",          result.Address.Region.Country);  // default preserve
 
 `BuildAsync` resolves all `IFieldValue<T>` properties immediately, appends the resolved dictionary to the accumulation, and returns a typed `TResponse` snapshot. `GetAccumulated<TItem>()` returns the accumulated `List<Dictionary<string, object?>>` of already-resolved values and **clears the accumulation** — subsequent calls return an empty list until more items are built. Resolution happens once at build time — not again when the request is sent.
 
-`BuildAsync` returns `TResponse`, so callers can reference resolved values (including generated ones) directly:
+`ResolveRecursively` always boxes lists as `List<object?>`, not `List<Dictionary<string, object?>>`. A `From` lambda that returns `List<Dictionary<string, object?>>` (e.g. from `GetAccumulated`) will be re-boxed when resolved. In `MapBody`, cast accumulated fields to `List<object?>`:
+
+```csharp
+public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
+{
+    ["Commands"] = (List<object?>)resolvedFields["Commands"],  // not List<Dictionary<string, object?>>
+};
+```
+
+`BuildAsync` returns `TResponse` — a plain record with resolved values, not `IFieldValue<T>` wrappers. The resolved dictionary is serialized and deserialized into `TResponse`, so every property is a concrete value at the point of return:
 
 ```csharp
 var widget = await BuildAsync(new AddOrderItem() with { ProductName = Static("Deluxe Widget"), Quantity = Static(3) });

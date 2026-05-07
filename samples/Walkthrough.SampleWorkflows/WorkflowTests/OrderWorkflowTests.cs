@@ -211,9 +211,7 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
         var target = new HttpTarget(SampleApiUrl)
             .Register(new LoginStep())
             .Register(new ExplicitCreateUserStep());
-
-        var context = new WorkflowContext()
-            .WithTargetResolver(_ => target);
+        var context = new WorkflowContext().WithTargetResolver(_ => target);
 
         await context.ExecuteAsync(new LoginRequest());
         var user = await context.ExecuteAsync(new CreateUserRequest());
@@ -249,7 +247,7 @@ public class MixedItemTypes_AccumulateUnderBaseType : WalkthroughTestBase
 }
 
 // Demonstrates plugging a custom ITarget — a plain function wrapping an HttpClient call —
-// into the resolver alongside a regular HttpTarget for the remaining steps.
+// into the context alongside a regular HttpTarget for the remaining steps.
 public class Login_ViaCustomTarget_CanPlaceOrder
 {
     private const string SampleApiUrl = "http://localhost:4200";
@@ -279,8 +277,8 @@ public class Login_ViaCustomTarget_CanPlaceOrder
             .Register(new CreateUserStep())
             .Register(new CreateOrderStep());
 
-        var context = new WorkflowContext()
-            .WithTargetResolver(stepName => stepName == "login"
+        var context = new WorkflowContext().WithTargetResolver(stepName =>
+            stepName == "login"
                 ? (ITarget)new DirectLoginTarget(SampleApiUrl)
                 : httpTarget);
 

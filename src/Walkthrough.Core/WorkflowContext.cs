@@ -87,6 +87,7 @@ public class WorkflowContext
 
         var json = System.Text.Json.JsonSerializer.Serialize(resolved);
         var response = System.Text.Json.JsonSerializer.Deserialize<TResponse>(json, _jsonOptions)!;
+        _captures[item.BuildableName] = response!;
         return Task.FromResult(response);
     }
 

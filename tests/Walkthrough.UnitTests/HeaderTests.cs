@@ -143,17 +143,16 @@ public class HttpTargetHeaderTests : IDisposable
     private readonly int _port;
     private readonly List<NameValueCollection> _receivedHeaders = [];
 
-    // One request/step pair per scenario to avoid assembly-scan ambiguity.
     private record FakeResponse(string Id);
 
-    private record WithHeadersRequest() : WorkflowRequest<FakeResponse>("doThing");
+    private record WithHeadersRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
     private class WithHeadersStep : HttpStep<WithHeadersRequest, FakeResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
         public override string Path => "/thing";
     }
 
-    private record StepLevelHeaderRequest() : WorkflowRequest<FakeResponse>("doThing");
+    private record StepLevelHeaderRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
     private class StepLevelHeaderStep : HttpStep<StepLevelHeaderRequest, FakeResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
@@ -162,14 +161,14 @@ public class HttpTargetHeaderTests : IDisposable
             new Dictionary<string, IFieldValue<string>> { ["X-Api-Version"] = Static("2") };
     }
 
-    private record PerRequestHeaderRequest() : WorkflowRequest<FakeResponse>("doThing");
+    private record PerRequestHeaderRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
     private class PerRequestHeaderStep : HttpStep<PerRequestHeaderRequest, FakeResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
         public override string Path => "/thing";
     }
 
-    private record StepVsTargetRequest() : WorkflowRequest<FakeResponse>("doThing");
+    private record StepVsTargetRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
     private class StepVsTargetStep : HttpStep<StepVsTargetRequest, FakeResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
@@ -178,7 +177,7 @@ public class HttpTargetHeaderTests : IDisposable
             new Dictionary<string, IFieldValue<string>> { ["X-Level"] = Static("step") };
     }
 
-    private record RequestVsStepRequest() : WorkflowRequest<FakeResponse>("doThing");
+    private record RequestVsStepRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
     private class RequestVsStepStep : HttpStep<RequestVsStepRequest, FakeResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
@@ -219,26 +218,16 @@ public class HttpTargetHeaderTests : IDisposable
 
     public void Dispose() => _listener.Stop();
 
-    private HttpTarget Target() =>
-        new HttpTarget($"http://127.0.0.1:{_port}")
-            .Register(new WithHeadersStep())
-            .Register(new StepLevelHeaderStep())
-            .Register(new PerRequestHeaderStep())
-            .Register(new StepVsTargetStep())
-            .Register(new RequestVsStepStep())
-            .Register(new FromAuthStep());
-
-    private static WorkflowContext Context(HttpTarget target) =>
-        new WorkflowContext().WithTargetResolver(_ => target);
+    private HttpTarget Target() => new HttpTarget($"http://127.0.0.1:{_port}");
 
     [Fact]
     public async Task WithHeaders_SentWithRequest()
     {
-        var target = Target().WithHeaders(new Dictionary<string, IFieldValue<string>>
-        {
-            ["X-Tenant-Id"] = Static("acme")
-        });
-        await Context(target).ExecuteAsync(new WithHeadersRequest());
+        var target = Target()
+            .Register(new WithHeadersStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>> { ["X-Tenant-Id"] = Static("acme") });
+        var ctx = new WorkflowContext().WithTargetResolver(_ => target);
+        await ctx.ExecuteAsync(new WithHeadersRequest());
 
         Assert.Equal("acme", _receivedHeaders[0]["X-Tenant-Id"]);
     }
@@ -246,7 +235,8 @@ public class HttpTargetHeaderTests : IDisposable
     [Fact]
     public async Task StepHeaders_SentWithRequest()
     {
-        await Context(Target()).ExecuteAsync(new StepLevelHeaderRequest());
+        var ctx = new WorkflowContext().WithTargetResolver(_ => Target().Register(new StepLevelHeaderStep()));
+        await ctx.ExecuteAsync(new StepLevelHeaderRequest());
 
         Assert.Equal("2", _receivedHeaders[0]["X-Api-Version"]);
     }
@@ -258,7 +248,8 @@ public class HttpTargetHeaderTests : IDisposable
         {
             Headers = new Dictionary<string, IFieldValue<string>> { ["X-Request-Id"] = Static("req-123") }
         };
-        await Context(Target()).ExecuteAsync(request);
+        var ctx = new WorkflowContext().WithTargetResolver(_ => Target().Register(new PerRequestHeaderStep()));
+        await ctx.ExecuteAsync(request);
 
         Assert.Equal("req-123", _receivedHeaders[0]["X-Request-Id"]);
     }
@@ -266,11 +257,11 @@ public class HttpTargetHeaderTests : IDisposable
     [Fact]
     public async Task StepWinsOverTarget_ForSameKey()
     {
-        var target = Target().WithHeaders(new Dictionary<string, IFieldValue<string>>
-        {
-            ["X-Level"] = Static("target")
-        });
-        await Context(target).ExecuteAsync(new StepVsTargetRequest());
+        var target = Target()
+            .Register(new StepVsTargetStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>> { ["X-Level"] = Static("target") });
+        var ctx = new WorkflowContext().WithTargetResolver(_ => target);
+        await ctx.ExecuteAsync(new StepVsTargetRequest());
 
         Assert.Equal("step", _receivedHeaders[0]["X-Level"]);
     }
@@ -282,7 +273,8 @@ public class HttpTargetHeaderTests : IDisposable
         {
             Headers = new Dictionary<string, IFieldValue<string>> { ["X-Level"] = Static("request") }
         };
-        await Context(Target()).ExecuteAsync(request);
+        var ctx = new WorkflowContext().WithTargetResolver(_ => Target().Register(new RequestVsStepStep()));
+        await ctx.ExecuteAsync(request);
 
         Assert.Equal("request", _receivedHeaders[0]["X-Level"]);
     }
@@ -290,7 +282,7 @@ public class HttpTargetHeaderTests : IDisposable
     // Auth expressed as a header using From — equivalent to auth: bearer.
     // Uses a separate in-memory target for login so only one HTTP request hits the listener.
     private record FakeTokenResponse(string Token);
-    private record FromAuthRequest() : WorkflowRequest<FakeResponse>("doThing");
+    private record FromAuthRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
     private class FromAuthStep : HttpStep<FromAuthRequest, FakeResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
@@ -312,13 +304,13 @@ public class HttpTargetHeaderTests : IDisposable
     [Fact]
     public async Task FromInHeader_ConstructsBearerToken()
     {
-        // Login is handled in-memory; only the doThing request hits the HTTP listener.
-        var fakeLogin = new FakeLoginTarget(new FakeTokenResponse("my-token"));
-        var context = new WorkflowContext()
-            .WithTargetResolver(n => n == "login" ? (ITarget)fakeLogin : Target());
+        var fakeLogin  = new FakeLoginTarget(new FakeTokenResponse("my-token"));
+        var httpTarget = Target().Register(new FromAuthStep());
+        var ctx = new WorkflowContext().WithTargetResolver(stepName =>
+            stepName == "login" ? (ITarget)fakeLogin : httpTarget);
 
-        await context.ExecuteAsync(new FakeLoginRequest());
-        await context.ExecuteAsync(new FromAuthRequest());
+        await ctx.ExecuteAsync(new FakeLoginRequest());
+        await ctx.ExecuteAsync(new FromAuthRequest());
 
         Assert.Equal("Bearer my-token", _receivedHeaders[0]["Authorization"]);
     }

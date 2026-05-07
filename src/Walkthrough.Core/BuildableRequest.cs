@@ -11,6 +11,12 @@ public abstract record BuildableRequest
     /// <c>public override Type AccumulationKey =&gt; typeof(MyBaseItem);</c>
     /// </summary>
     public virtual Type AccumulationKey => GetType();
+
+    /// <summary>
+    /// The key used to capture the resolved snapshot in WorkflowContext after BuildAsync.
+    /// Defaults to the runtime type name. Override when the type name is not a suitable key.
+    /// </summary>
+    public virtual string BuildableName => GetType().Name;
 }
 
 /// <summary>

@@ -4,7 +4,7 @@ using static Walkthrough.Core.FieldValues;
 
 namespace Walkthrough.SampleWorkflows;
 
-public record EchoHeadersRequest() : WorkflowRequest<Dictionary<string, string>>("echoHeaders");
+public record EchoHeadersRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeaders");
 
 public class EchoHeadersStep : HttpStep<EchoHeadersRequest, Dictionary<string, string>>
 {
@@ -12,7 +12,7 @@ public class EchoHeadersStep : HttpStep<EchoHeadersRequest, Dictionary<string, s
     public override string Path => "/echo/headers";
 }
 
-public record EchoHeadersWithStepHeaderRequest() : WorkflowRequest<Dictionary<string, string>>("echoHeadersWithStepHeader");
+public record EchoHeadersWithStepHeaderRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeadersWithStepHeader");
 
 public class EchoHeadersWithStepHeaderStep : HttpStep<EchoHeadersWithStepHeaderRequest, Dictionary<string, string>>
 {
@@ -22,7 +22,7 @@ public class EchoHeadersWithStepHeaderStep : HttpStep<EchoHeadersWithStepHeaderR
         new Dictionary<string, IFieldValue<string>> { ["x-step-header"] = Static("from-step") };
 }
 
-public record EchoHeadersWithFromAuthRequest() : WorkflowRequest<Dictionary<string, string>>("echoHeadersWithFromAuth");
+public record EchoHeadersWithFromAuthRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeadersWithFromAuth");
 
 public class EchoHeadersWithFromAuthStep : HttpStep<EchoHeadersWithFromAuthRequest, Dictionary<string, string>>
 {

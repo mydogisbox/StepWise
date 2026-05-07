@@ -2,13 +2,22 @@ using Walkthrough.Core;
 
 namespace Walkthrough.Http;
 
+internal interface IHttpStep<TResponse>
+{
+    Task<TResponse> RunAsync(
+        string baseUrl,
+        HttpWorkflowRequest<TResponse> request,
+        Dictionary<string, object?> targetHeaders,
+        WorkflowContext context);
+}
+
 /// <summary>
 /// Declares the HTTP-specific execution details for a request type.
 /// Subclasses define Method, Path, and optionally Query and Headers.
 /// Registered with an <see cref="HttpTarget"/> via Register().
 /// </summary>
-public abstract class HttpStep<TRequest, TResponse>
-    where TRequest : WorkflowRequest<TResponse>
+public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
+    where TRequest : HttpWorkflowRequest<TResponse>
 {
     public abstract HttpMethod Method { get; }
     public abstract string Path { get; }
@@ -22,7 +31,7 @@ public abstract class HttpStep<TRequest, TResponse>
 
     /// <summary>
     /// HTTP headers sent with every invocation of this step.
-    /// Merged over target-level headers; request-level headers (from <see cref="WorkflowRequest{TResponse}.Headers"/>) override these.
+    /// Merged over target-level headers; request-level headers (from <see cref="HttpWorkflowRequest{TResponse}.Headers"/>) override these.
     /// </summary>
     public virtual IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
         new Dictionary<string, IFieldValue<string>>();
@@ -34,6 +43,21 @@ public abstract class HttpStep<TRequest, TResponse>
     /// </summary>
     public virtual Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields)
         => resolvedFields;
+
+    private static readonly HashSet<string> _httpExclusions = ["PathParams", "Query", "Headers"];
+
+    Task<TResponse> IHttpStep<TResponse>.RunAsync(
+        string baseUrl,
+        HttpWorkflowRequest<TResponse> request,
+        Dictionary<string, object?> targetHeaders,
+        WorkflowContext context)
+    {
+        var resolvedFields = FieldValueResolver.Resolve(request, context, _httpExclusions);
+        var pathParams     = FieldValueResolver.ResolveGroup(request.PathParams, context);
+        var queryOverrides = FieldValueResolver.ResolveGroup(request.Query, context);
+        var requestHeaders = FieldValueResolver.ResolveGroup(request.Headers, context);
+        return RunAsync(baseUrl, resolvedFields, pathParams, queryOverrides, targetHeaders, requestHeaders, context);
+    }
 
     internal async Task<TResponse> RunAsync(
         string baseUrl,

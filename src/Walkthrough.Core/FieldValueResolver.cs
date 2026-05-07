@@ -13,21 +13,23 @@ public static class FieldValueResolver
     private static readonly HashSet<string> ExcludedProperties = new()
     {
         nameof(WorkflowRequest<object>.StepName),
-        nameof(WorkflowRequest<object>.PathParams),
-        nameof(WorkflowRequest<object>.Query),
-        nameof(WorkflowRequest<object>.Headers),
         "EqualityContract",
     };
 
     /// <summary>
     /// Resolves all IFieldValue&lt;T&gt; body properties on a WorkflowRequest.
-    /// PathParams and Query are excluded — resolve them separately.
     /// </summary>
     public static Dictionary<string, object?> Resolve<TResponse>(
         WorkflowRequest<TResponse> request,
-        WorkflowContext context)
-        => ResolveProperties(request, context, ExcludedProperties,
+        WorkflowContext context,
+        HashSet<string>? additionalExclusions = null)
+    {
+        var exclusions = additionalExclusions is null
+            ? ExcludedProperties
+            : new HashSet<string>(ExcludedProperties.Concat(additionalExclusions));
+        return ResolveProperties(request, context, exclusions,
             t => t == typeof(WorkflowRequest<TResponse>));
+    }
 
     /// <summary>Resolves a flat dictionary of named string field values into plain values.</summary>
     public static Dictionary<string, object?> ResolveGroup(

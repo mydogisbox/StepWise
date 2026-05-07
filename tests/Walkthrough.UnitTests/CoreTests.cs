@@ -259,6 +259,34 @@ public class BuildableRequestAccumulationTests
     }
 
     [Fact]
+    public async Task BuildAsync_CapturesUnderTypeName_AccessibleViaGet()
+    {
+        var context = new WorkflowContext();
+        await context.BuildAsync(new LineItem() with { Name = Static("First") });
+        await context.BuildAsync(new LineItem() with { Name = Static("Last") });
+
+        var captured = context.Get<LineItemResponse>("LineItem");
+
+        Assert.Equal("Last", captured.Name);
+    }
+
+    [Fact]
+    public async Task BuildAsync_CapturedResult_AccessibleFromSubsequentFromLambda()
+    {
+        var context = new WorkflowContext();
+        await context.BuildAsync(new LineItem() with { Name = Static("Widget") });
+
+        var resolved = FieldValueResolver.Resolve(
+            new OrderRequest() with
+            {
+                Items = From(ctx => ctx.GetAccumulated<LineItem>())
+            },
+            context);
+
+        Assert.Equal("Widget", context.Get<LineItemResponse>("LineItem").Name);
+    }
+
+    [Fact]
     public async Task GetAccumulated_ReturnsResolvedDicts()
     {
         var context = new WorkflowContext();

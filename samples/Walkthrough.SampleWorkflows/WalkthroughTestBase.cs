@@ -7,7 +7,6 @@ namespace Walkthrough.SampleWorkflows;
 public abstract class WalkthroughTestBase
 {
     private const string SampleApiUrl = "http://localhost:4200";
-
     private readonly WorkflowContext _context;
 
     protected WalkthroughTestBase()
@@ -26,7 +25,7 @@ public abstract class WalkthroughTestBase
     }
 
     protected Task<TResponse> ExecuteAsync<TResponse>(
-        WorkflowRequest<TResponse> request,
+        HttpWorkflowRequest<TResponse> request,
         Dictionary<string, string>? query = null,
         Dictionary<string, string>? pathParams = null,
         Dictionary<string, string>? headers = null)
