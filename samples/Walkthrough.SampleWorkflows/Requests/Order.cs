@@ -19,37 +19,24 @@ public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
 public record CreateOrderRequest() : HttpWorkflowRequest<OrderResponse>("createOrder")
 {
     public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
-    public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
+    public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
 public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
-    public override string Path => "/orders";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
+    public override string     Path   => "/orders";
 }
 
 public record GetOrderRequest() : HttpWorkflowRequest<OrderResponse>("getOrder")
 {
-    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
-    {
-        ["orderId"] = From(ctx => ctx.Get<OrderResponse>("createOrder").Id)
-    };
+    public IFieldValue<string> OrderId { get; init; } = From(ctx => ctx.Get<OrderResponse>("createOrder").Id);
 }
 
 public class GetOrderStep : HttpStep<GetOrderRequest, OrderResponse>
 {
     public override HttpMethod Method => HttpMethod.Get;
-    public override string Path => "/orders/{orderId}";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
+    public override string     Path   => "/orders/{orderId}";
 }
 
 // Polymorphic order items — shared fields live on the base; each subtype adds its own unique field.

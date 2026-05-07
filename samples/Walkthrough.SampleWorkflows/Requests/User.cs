@@ -17,12 +17,7 @@ public record CreateUserRequest() : HttpWorkflowRequest<UserResponse>("createUse
 public class CreateUserStep : HttpStep<CreateUserRequest, UserResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
-    public override string Path => "/users";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
+    public override string     Path   => "/users";
 }
 
 // --- UpdateUserAddress ---
@@ -58,39 +53,28 @@ public record ContactFields
 
 public record UpdateUserAddressRequest() : HttpWorkflowRequest<UpdateUserAddressResponse>("updateUserAddress")
 {
-    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
-    {
-        ["userId"] = From(ctx => ctx.Get<UserResponse>("createUser").Id)
-    };
+    public IFieldValue<string>        UserId  { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<ContactFields> Contact { get; init; } = Static(new ContactFields());
 }
 
 public class UpdateUserAddressStep : HttpStep<UpdateUserAddressRequest, UpdateUserAddressResponse>
 {
     public override HttpMethod Method => HttpMethod.Put;
-    public override string Path => "/users/{userId}/address";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
+    public override string     Path   => "/users/{userId}/address";
 }
 
 // --- GetUsersByRole ---
 
-public record GetUsersByRoleRequest() : HttpWorkflowRequest<List<UserResponse>>("getUsersByRole");
+public record GetUsersByRoleRequest() : HttpWorkflowRequest<List<UserResponse>>("getUsersByRole")
+{
+    public IFieldValue<string> Role { get; init; } = Static("user");
+}
 
 public class GetUsersByRoleStep : HttpStep<GetUsersByRoleRequest, List<UserResponse>>
 {
     public override HttpMethod Method => HttpMethod.Get;
-    public override string Path => "/users";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Query { get; } = new Dictionary<string, IFieldValue<string>>
-    {
-        ["role"] = Static("user")
-    };
+    public override string     Path   => "/users";
+
+    public override Dictionary<string, string> MapQuery(Dictionary<string, object?> resolvedFields)
+        => new() { ["role"] = resolvedFields["Role"]?.ToString() ?? "" };
 }

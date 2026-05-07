@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Walkthrough.Core;
+using Walkthrough.Http;
 using Walkthrough.Json;
 using static Walkthrough.Core.FieldValues;
 using Xunit;
@@ -43,8 +44,9 @@ public class WorkflowContextTests
     [Fact]
     public async Task Get_ThrowsDescriptiveException_WhenStepNotFound()
     {
-        var context = new WorkflowContext().WithTargetResolver(_ => new FakeTarget());
-        await context.ExecuteAsync(new FakeRequest());
+        var context = new WorkflowContext();
+        var runner  = new HttpWorkflowRunner(context, _ => new FakeTarget());
+        await runner.ExecuteAsync(new FakeRequest());
 
         var ex = Assert.Throws<WorkflowContextException>(
             () => context.Get<object>("missingStep"));
@@ -248,11 +250,17 @@ public class BuildableRequestAccumulationTests
         public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
     }
 
+    private static (WorkflowContext ctx, HttpWorkflowRunner runner) Make()
+    {
+        var ctx = new WorkflowContext();
+        return (ctx, new HttpWorkflowRunner(ctx));
+    }
+
     [Fact]
     public async Task BuildAsync_ReturnsResolvedResponse()
     {
-        var context = new WorkflowContext();
-        var result = await context.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(3) });
+        var (_, runner) = Make();
+        var result = await runner.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(3) });
 
         Assert.Equal("Gadget", result.Name);
         Assert.Equal(3, result.Count);
@@ -261,11 +269,11 @@ public class BuildableRequestAccumulationTests
     [Fact]
     public async Task BuildAsync_CapturesUnderTypeName_AccessibleViaGet()
     {
-        var context = new WorkflowContext();
-        await context.BuildAsync(new LineItem() with { Name = Static("First") });
-        await context.BuildAsync(new LineItem() with { Name = Static("Last") });
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new LineItem() with { Name = Static("First") });
+        await runner.BuildAsync(new LineItem() with { Name = Static("Last") });
 
-        var captured = context.Get<LineItemResponse>("LineItem");
+        var captured = ctx.Get<LineItemResponse>("LineItem");
 
         Assert.Equal("Last", captured.Name);
     }
@@ -273,27 +281,27 @@ public class BuildableRequestAccumulationTests
     [Fact]
     public async Task BuildAsync_CapturedResult_AccessibleFromSubsequentFromLambda()
     {
-        var context = new WorkflowContext();
-        await context.BuildAsync(new LineItem() with { Name = Static("Widget") });
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new LineItem() with { Name = Static("Widget") });
 
         var resolved = FieldValueResolver.Resolve(
             new OrderRequest() with
             {
-                Items = From(ctx => ctx.GetAccumulated<LineItem>())
+                Items = From(c => c.GetAccumulated<LineItem>())
             },
-            context);
+            ctx);
 
-        Assert.Equal("Widget", context.Get<LineItemResponse>("LineItem").Name);
+        Assert.Equal("Widget", ctx.Get<LineItemResponse>("LineItem").Name);
     }
 
     [Fact]
     public async Task GetAccumulated_ReturnsResolvedDicts()
     {
-        var context = new WorkflowContext();
-        await context.BuildAsync(new LineItem());
-        await context.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(3) });
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new LineItem());
+        await runner.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(3) });
 
-        var items = context.GetAccumulated<LineItem>();
+        var items = ctx.GetAccumulated<LineItem>();
 
         Assert.Equal(2, items.Count);
         Assert.Equal("Widget", items[0]["Name"]);
@@ -305,11 +313,11 @@ public class BuildableRequestAccumulationTests
     [Fact]
     public async Task BuildableItems_AvailableInResolvedRequest()
     {
-        var context = new WorkflowContext();
-        await context.BuildAsync(new LineItem() with { Name = Static("Widget"), Count = Static(2) });
-        await context.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(5) });
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new LineItem() with { Name = Static("Widget"), Count = Static(2) });
+        await runner.BuildAsync(new LineItem() with { Name = Static("Gadget"), Count = Static(5) });
 
-        var resolved = FieldValueResolver.Resolve(new OrderRequest(), context);
+        var resolved = FieldValueResolver.Resolve(new OrderRequest(), ctx);
 
         var items = Assert.IsType<List<object?>>(resolved["Items"]);
         Assert.Equal(2, items.Count);
@@ -324,11 +332,11 @@ public class BuildableRequestAccumulationTests
     [Fact]
     public async Task StaticFactoryVariants_AccumulateUnderSameType()
     {
-        var context = new WorkflowContext();
-        await context.BuildAsync(new LineItem() with { Name = Static("Widget") });
-        await context.BuildAsync(new LineItem() with { Name = Static("Gadget") });
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new LineItem() with { Name = Static("Widget") });
+        await runner.BuildAsync(new LineItem() with { Name = Static("Gadget") });
 
-        var items = context.GetAccumulated<LineItem>();
+        var items = ctx.GetAccumulated<LineItem>();
 
         Assert.Equal(2, items.Count);
         Assert.Equal("Widget", items[0]["Name"]);
@@ -352,11 +360,11 @@ public class BuildableRequestAccumulationTests
     [Fact]
     public async Task AccumulationKey_Override_PullsSubtypesIntoBaseTypeBucket()
     {
-        var context = new WorkflowContext();
-        await context.BuildAsync(new AlphaItem());
-        await context.BuildAsync(new BetaItem());
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new AlphaItem());
+        await runner.BuildAsync(new BetaItem());
 
-        var items = context.GetAccumulated<BaseItem>();
+        var items = ctx.GetAccumulated<BaseItem>();
 
         Assert.Equal(2, items.Count);
         Assert.Equal("alpha", items[0]["Kind"]);
@@ -479,11 +487,12 @@ public class MultiTargetWorkflowTests
         var loginTarget = new CountingFakeTarget<TokenResponse>(new TokenResponse("abc"));
         var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
 
-        var context = new WorkflowContext()
-            .WithTargetResolver(n => n == "login" ? (ITarget)loginTarget : userTarget);
+        var context = new WorkflowContext();
+        var runner  = new HttpWorkflowRunner(context,
+            n => n == "login" ? (ITarget)loginTarget : userTarget);
 
-        await context.ExecuteAsync(new LoginRequest());
-        await context.ExecuteAsync(new CreateUserRequest());
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
 
         Assert.Equal(1, loginTarget.CallCount);
         Assert.Equal(1, userTarget.CallCount);
@@ -495,11 +504,12 @@ public class MultiTargetWorkflowTests
         var loginTarget = new CountingFakeTarget<TokenResponse>(new TokenResponse("abc"));
         var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
 
-        var context = new WorkflowContext()
-            .WithTargetResolver(n => n == "login" ? (ITarget)loginTarget : userTarget);
+        var context = new WorkflowContext();
+        var runner  = new HttpWorkflowRunner(context,
+            n => n == "login" ? (ITarget)loginTarget : userTarget);
 
-        await context.ExecuteAsync(new LoginRequest());
-        await context.ExecuteAsync(new CreateUserRequest());
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
 
         Assert.Equal("abc", context.Get<TokenResponse>("login").Token);
         Assert.Equal("u1",  context.Get<UserResponse>("createUser").Id);
@@ -511,10 +521,11 @@ public class MultiTargetWorkflowTests
         var loginTarget = new CountingFakeTarget<TokenResponse>(new TokenResponse("abc"));
         var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
 
-        var context = new WorkflowContext()
-            .WithTargetResolver(n => n == "login" ? (ITarget)loginTarget : userTarget);
+        var context = new WorkflowContext();
+        var runner  = new HttpWorkflowRunner(context,
+            n => n == "login" ? (ITarget)loginTarget : userTarget);
 
-        await context.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new LoginRequest());
 
         // Resolve the createUser request fields before executing — the Token From should
         // reach across the target boundary and read the login capture.

@@ -1,94 +1,27 @@
 namespace Walkthrough.Core;
 
 /// <summary>
-/// Carries shared state across all steps in a workflow execution.
-/// Holds a target resolver and captures step responses for use by subsequent steps via From(...).
+/// Pure state bag shared across all steps in a workflow execution.
+/// Stores step responses and build-step accumulations.
+/// Execution is handled by a runner such as HttpWorkflowRunner.
 /// </summary>
 public class WorkflowContext
 {
-    private Func<string, ITarget>? _targetResolver;
     private readonly Dictionary<string, object> _captures = new();
     private readonly Dictionary<Type, List<object>> _accumulated = new();
 
     /// <summary>
-    /// Registers a function that resolves a step name to the target that should execute it.
+    /// Appends a resolved build item to the accumulation list for the given key.
+    /// Called by runners during BuildAsync.
     /// </summary>
-    public WorkflowContext WithTargetResolver(Func<string, ITarget> resolver)
+    public void Accumulate(Type key, Dictionary<string, object?> item)
     {
-        _targetResolver = resolver;
-        return this;
-    }
-
-    /// <summary>
-    /// Executes a request against the resolved target, captures the response,
-    /// and returns it as a typed result.
-    /// </summary>
-    public async Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
-    {
-        if (_targetResolver is null)
-            throw new WorkflowContextException(
-                "No target resolver registered. Call WithTargetResolver before executing steps.");
-
-        var target = _targetResolver(request.StepName);
-        var response = await target.ExecuteAsync(request, this);
-        _captures[request.StepName] = response!;
-        return response;
-    }
-
-    /// <summary>
-    /// Repeatedly executes a request until <paramref name="until"/> returns true
-    /// or <paramref name="timeoutMs"/> elapses, with <paramref name="intervalMs"/> between attempts.
-    /// The final successful response is captured under <see cref="WorkflowRequest{TResponse}.StepName"/>.
-    /// </summary>
-    public async Task<TResponse> PollAsync<TResponse>(
-        WorkflowRequest<TResponse> request,
-        Func<TResponse, bool> until,
-        int intervalMs = 500,
-        int timeoutMs = 10000)
-    {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        while (true)
-        {
-            var response = await ExecuteAsync(request);
-            if (until(response)) return response;
-
-            var remaining = timeoutMs - sw.ElapsedMilliseconds;
-
-            if (remaining <= 0)
-                throw new WorkflowContextException(
-                    $"PollAsync timed out after {timeoutMs}ms waiting for step '{request.StepName}'.");
-
-            var delayMs = Math.Min(intervalMs, remaining);
-
-            await Task.Delay((int)delayMs);
-        }
-    }
-
-    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions =
-        new() { PropertyNameCaseInsensitive = true };
-
-    /// <summary>
-    /// Resolves the item's field values immediately, stores the resolved dictionary in the
-    /// accumulated list for this item type, and returns a typed snapshot of the resolved values.
-    /// Resolution happens once at build time — no deferred re-resolution when the request is sent.
-    /// </summary>
-    public Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
-    {
-        var runtimeType = item.AccumulationKey;
-        if (!_accumulated.TryGetValue(runtimeType, out var list))
+        if (!_accumulated.TryGetValue(key, out var list))
         {
             list = new List<object>();
-            _accumulated[runtimeType] = list;
+            _accumulated[key] = list;
         }
-
-        var resolved = FieldValueResolver.ResolveObject(item, this);
-        list.Add(resolved);
-
-        var json = System.Text.Json.JsonSerializer.Serialize(resolved);
-        var response = System.Text.Json.JsonSerializer.Deserialize<TResponse>(json, _jsonOptions)!;
-        _captures[item.BuildableName] = response!;
-        return Task.FromResult(response);
+        list.Add(item);
     }
 
     /// <summary>
@@ -143,7 +76,7 @@ public class WorkflowContext
 
     /// <summary>
     /// Captures a raw response under the given step name.
-    /// Used by JSON workflow runners where the response type is not known at compile time.
+    /// Used by runners and JSON workflow runners.
     /// </summary>
     public void CaptureRaw(string stepName, object response)
     {

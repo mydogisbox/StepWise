@@ -40,9 +40,7 @@ public class HttpTarget : ITarget
         return new(_baseUrl, _headers, newSteps);
     }
 
-    public Task<TResponse> ExecuteAsync<TResponse>(
-        WorkflowRequest<TResponse> request,
-        WorkflowContext context)
+    Task<TResponse> ITarget.ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
     {
         if (request is not HttpWorkflowRequest<TResponse> httpRequest)
             throw new HttpStepException(

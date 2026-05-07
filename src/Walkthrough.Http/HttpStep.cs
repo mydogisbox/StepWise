@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Walkthrough.Core;
 
 namespace Walkthrough.Http;
@@ -12,39 +13,44 @@ internal interface IHttpStep<TResponse>
 }
 
 /// <summary>
-/// Declares the HTTP-specific execution details for a request type.
-/// Subclasses define Method, Path, and optionally Query and Headers.
-/// Registered with an <see cref="HttpTarget"/> via Register().
+/// Declares the HTTP execution details for a request type.
+/// Subclasses define Method and Path. Override MapBody, MapQuery, and MapHeaders to
+/// control how resolved request fields are routed to the body, query string, and headers.
+/// Path parameters are extracted automatically by matching {placeholder} names to request field names.
 /// </summary>
 public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     where TRequest : HttpWorkflowRequest<TResponse>
 {
+    private static readonly Regex PlaceholderRegex =
+        new(@"\{(\w+)\}", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public abstract HttpMethod Method { get; }
     public abstract string Path { get; }
 
     /// <summary>
-    /// Key-value pairs appended to the URL as a query string (<c>?key=value&amp;…</c>).
-    /// Defined alongside the path as part of the URL shape, not per-request data.
-    /// </summary>
-    public virtual IReadOnlyDictionary<string, IFieldValue<string>> Query { get; } =
-        new Dictionary<string, IFieldValue<string>>();
-
-    /// <summary>
-    /// HTTP headers sent with every invocation of this step.
-    /// Merged over target-level headers; request-level headers (from <see cref="HttpWorkflowRequest{TResponse}.Headers"/>) override these.
-    /// </summary>
-    public virtual IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>();
-
-    /// <summary>
-    /// Maps already-resolved request fields to the HTTP body.
-    /// Default: pass all resolved fields through unchanged.
-    /// Override to rename, filter, or transform fields before they are serialized.
+    /// Maps resolved request fields to the HTTP request body.
+    /// Default: all fields except those consumed as path params ({placeholder} names).
+    /// Override to rename, filter, or transform fields before serialization.
     /// </summary>
     public virtual Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields)
-        => resolvedFields;
+    {
+        var pathParamNames = GetPlaceholderNames();
+        return resolvedFields
+            .Where(kv => !pathParamNames.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+    }
 
-    private static readonly HashSet<string> _httpExclusions = ["PathParams", "Query", "Headers"];
+    /// <summary>
+    /// Maps resolved request fields to URL query parameters.
+    /// Default: no query parameters.
+    /// </summary>
+    public virtual Dictionary<string, string> MapQuery(Dictionary<string, object?> resolvedFields) => [];
+
+    /// <summary>
+    /// Maps resolved request fields to HTTP headers.
+    /// Default: no step-level headers. Merged over target-level headers; step wins for matching keys.
+    /// </summary>
+    public virtual Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields) => [];
 
     Task<TResponse> IHttpStep<TResponse>.RunAsync(
         string baseUrl,
@@ -52,32 +58,42 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
         Dictionary<string, object?> targetHeaders,
         WorkflowContext context)
     {
-        var resolvedFields = FieldValueResolver.Resolve(request, context, _httpExclusions);
-        var pathParams     = FieldValueResolver.ResolveGroup(request.PathParams, context);
-        var queryOverrides = FieldValueResolver.ResolveGroup(request.Query, context);
-        var requestHeaders = FieldValueResolver.ResolveGroup(request.Headers, context);
-        return RunAsync(baseUrl, resolvedFields, pathParams, queryOverrides, targetHeaders, requestHeaders, context);
+        var resolvedFields = FieldValueResolver.Resolve(request, context);
+        return RunAsync(baseUrl, resolvedFields, targetHeaders, context);
     }
 
     internal async Task<TResponse> RunAsync(
         string baseUrl,
         Dictionary<string, object?> resolvedFields,
-        Dictionary<string, object?> pathParams,
-        Dictionary<string, object?> requestQueryOverrides,
         Dictionary<string, object?> targetHeaders,
-        Dictionary<string, object?> requestHeaders,
         WorkflowContext context)
     {
-        var query = FieldValueResolver.ResolveGroup(Query, context);
-        foreach (var kv in requestQueryOverrides) query[kv.Key] = kv.Value;
+        // Auto-extract path params by matching {placeholder} names to resolved field names
+        var pathParams = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in PlaceholderRegex.Matches(Path))
+        {
+            var name = match.Groups[1].Value;
+            var field = resolvedFields.Keys.FirstOrDefault(k =>
+                string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+            if (field is not null)
+                pathParams[name] = resolvedFields[field];
+        }
 
-        var headers = new Dictionary<string, object?>(targetHeaders);
-        foreach (var kv in FieldValueResolver.ResolveGroup(Headers, context))
+        var query = MapQuery(resolvedFields)
+            .ToDictionary(kv => kv.Key, kv => (object?)kv.Value);
+
+        // Merge: target headers first, then step headers (step wins for matching keys)
+        var headers = new Dictionary<string, object?>(targetHeaders, StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in MapHeaders(resolvedFields))
             headers[kv.Key] = kv.Value;
-        foreach (var kv in requestHeaders) headers[kv.Key] = kv.Value;
 
         var body = MapBody(resolvedFields);
         var json = await HttpExecutor.SendAsync(baseUrl, Method, Path, pathParams, query, body, headers);
         return HttpExecutor.Deserialize<TResponse>(json);
     }
+
+    private HashSet<string> GetPlaceholderNames()
+        => PlaceholderRegex.Matches(Path)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

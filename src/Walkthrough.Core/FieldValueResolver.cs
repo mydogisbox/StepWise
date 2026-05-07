@@ -21,15 +21,9 @@ public static class FieldValueResolver
     /// </summary>
     public static Dictionary<string, object?> Resolve<TResponse>(
         WorkflowRequest<TResponse> request,
-        WorkflowContext context,
-        HashSet<string>? additionalExclusions = null)
-    {
-        var exclusions = additionalExclusions is null
-            ? ExcludedProperties
-            : new HashSet<string>(ExcludedProperties.Concat(additionalExclusions));
-        return ResolveProperties(request, context, exclusions,
+        WorkflowContext context)
+        => ResolveProperties(request, context, ExcludedProperties,
             t => t == typeof(WorkflowRequest<TResponse>));
-    }
 
     /// <summary>Resolves a flat dictionary of named string field values into plain values.</summary>
     public static Dictionary<string, object?> ResolveGroup(

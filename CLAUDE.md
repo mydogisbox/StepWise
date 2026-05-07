@@ -31,16 +31,17 @@ Walkthrough.Core
 ├── WorkflowRequest<TResponse>     — transport-agnostic base record; carries only StepName
 ├── BuildableRequest               — non-generic marker base for array item builders
 ├── BuildableRequest<TResponse>    — generic base; TResponse is the resolved snapshot type returned by BuildAsync
-├── WorkflowContext                — holds target resolver, captures, accumulations
+├── WorkflowContext                — pure state bag: captures and accumulations only; no execution logic
 ├── IFieldValue<T>                 — interface for resolvable field values
 ├── FieldValues                    — Static(), Generated(), From() factories
 └── FieldValueResolver             — reflection-based resolver
 
 Walkthrough.Http
-├── HttpWorkflowRequest<TResponse> — base record for HTTP requests; adds PathParams, Query, Headers
+├── HttpWorkflowRequest<TResponse> — marker base for HTTP requests; carries only body fields (StepName only)
+├── HttpWorkflowRunner             — executes steps, polls, and accumulates build items; owns ExecuteAsync/BuildAsync/PollAsync
 ├── HttpTarget                     — sends requests over HTTP; steps registered explicitly via Register()
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
-└── HttpStep<TRequest, TResponse>  — declares Method, Path, Query, Headers, and MapBody for one request type
+└── HttpStep<TRequest, TResponse>  — declares Method, Path, MapBody, MapQuery, and MapHeaders for one request type
 
 Walkthrough.Json
 ├── JsonWorkflowRunner             — pure engine: step execution, path resolution, assertion evaluation
@@ -148,14 +149,9 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
     public override string     Path   => "/orders";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
 
-    // MapBody is optional — the default passes all resolved fields through unchanged.
-    // Override to rename, filter, or transform fields before serialization.
+    // MapBody is optional — the default passes all resolved fields through, excluding any whose
+    // name matches a {placeholder} in Path. Override to rename, filter, or transform fields.
     public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
     {
         ["UserId"] = resolvedFields["UserId"],
@@ -166,52 +162,62 @@ public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
 
 ### URL parameters and query parameters
 
-Override `PathParams` for `{placeholder}` substitution and `Query` for query string parameters. Both are excluded from the request body:
+Path parameters are declared on the **request** as `IFieldValue<string>` fields. The step's `Path` contains `{placeholder}` segments — the step auto-extracts values by matching placeholder names to request field names (case-insensitive). Path param fields are automatically excluded from the request body.
 
 ```csharp
 public record GetOrderRequest() : HttpWorkflowRequest<OrderResponse>("getOrder")
 {
-    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
-    {
-        ["orderId"] = From(ctx => ctx.Get<OrderResponse>("createOrder").Id)
-    };
+    public IFieldValue<string> OrderId { get; init; } = From(ctx => ctx.Get<OrderResponse>("createOrder").Id);
 }
 
+public class GetOrderStep : HttpStep<GetOrderRequest, OrderResponse>
+{
+    public override HttpMethod Method => HttpMethod.Get;
+    public override string     Path   => "/orders/{orderId}";  // {orderId} matches OrderId field (case-insensitive)
+}
+```
+
+Query parameters are declared via `MapQuery` on the step, which receives the resolved request fields and returns the query string key-value pairs:
+
+```csharp
 public record SearchOrdersRequest() : HttpWorkflowRequest<List<OrderResponse>>("searchOrders")
 {
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Query { get; init; } = new Dictionary<string, IFieldValue<string>>
+    public IFieldValue<string> Status { get; init; } = Static("pending");
+    public IFieldValue<string> UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
+}
+
+public class SearchOrdersStep : HttpStep<SearchOrdersRequest, List<OrderResponse>>
+{
+    public override HttpMethod Method => HttpMethod.Get;
+    public override string     Path   => "/orders";
+
+    public override Dictionary<string, string> MapQuery(Dictionary<string, object?> resolvedFields) => new()
     {
-        ["status"] = Static("pending"),
-        ["userId"] = From(ctx => ctx.Get<UserResponse>("createUser").Id)
+        ["status"] = resolvedFields["Status"]?.ToString() ?? "",
+        ["userId"] = resolvedFields["UserId"]?.ToString() ?? "",
     };
 }
 ```
+
+Produces: `GET /orders?status=pending&userId=abc-123`
 
 ### Per-invocation overrides in C#
 
-`PathParams`, `Query`, and `Headers` can all be overridden per-call using the `with` expression, or via convenience parameters on `WalkthroughTestBase.ExecuteAsync` (which accept `Dictionary<string, string>` and wrap values in `Static`):
+Use the `with` expression to override request fields per call. This works for path params, query param sources, and any other request field:
 
 ```csharp
-// Convenience parameters — static strings only
-var admins = await ExecuteAsync(new GetUsersByRoleRequest(), query: new() { ["role"] = "admin" });
-var order  = await ExecuteAsync(new GetOrderRequest(), pathParams: new() { ["orderId"] = firstId });
-var echo   = await ExecuteAsync(new EchoRequest(), headers: new() { ["X-Request-Id"] = "abc" });
+// Override the path param source for a specific invocation
+var first  = await ExecuteAsync(new CreateOrderRequest());
+var second = await ExecuteAsync(new CreateOrderRequest());
+var retrieved = await ExecuteAsync(new GetOrderRequest() with { OrderId = Static(first.Id) });
 
-// with expression — full IFieldValue<string> support
-var retrieved = await ExecuteAsync(new GetOrderRequest() with
-{
-    PathParams = new Dictionary<string, IFieldValue<string>>
-    {
-        ["orderId"] = From(ctx => ctx.Get<OrderResponse>("firstOrder").Id)
-    }
-});
+// Override the query param source
+var admins = await ExecuteAsync(new GetUsersByRoleRequest() with { Role = Static("admin") });
 ```
-
-All three can be combined on the same invocation. Override values are merged over the step/request defaults — invocation wins for matching keys.
 
 ### Test class
 
-xUnit creates a new instance per class — each test gets a fresh `WorkflowContext` with no shared state:
+xUnit creates a new instance per class — each test gets a fresh `HttpWorkflowRunner` (and `WorkflowContext`) with no shared state:
 
 ```csharp
 public class PlacedOrder_CanBeRetrieved : WalkthroughTestBase
@@ -233,20 +239,27 @@ public class PlacedOrder_CanBeRetrieved : WalkthroughTestBase
 
 ### Custom targets and multi-target routing
 
-`WithTargetResolver(Func<string, ITarget>)` configures how `WorkflowContext` dispatches each step. The resolver receives the step name and returns any `ITarget` — `HttpTarget`, or a custom class implementing `ITarget`.
+`HttpWorkflowRunner` accepts a resolver function that maps step names to targets. The resolver receives the step name and returns any `ITarget` — `HttpTarget`, or a custom class implementing `ITarget`.
 
-Use this to route different steps to different services, or to swap in a hand-rolled implementation for a specific step:
+Use this to route different steps to different services, or to swap in a hand-rolled implementation for a specific step. It is also the standard pattern for auth headers — split login onto a plain target and put auth in `WithHeaders` on the API target so login itself doesn't receive auth headers:
 
 ```csharp
-// Route "login" to a custom HttpClient wrapper; all other steps go to HttpTarget
-var httpTarget = new HttpTarget(SampleApiUrl)
-    .Register(new CreateUserStep())
-    .Register(new CreateOrderStep());
+var loginTarget = new HttpTarget(SampleApiUrl)
+    .Register(new LoginStep());
 
-var context = new WorkflowContext()
-    .WithTargetResolver(stepName => stepName == "login"
-        ? (ITarget)new DirectLoginTarget(SampleApiUrl)
-        : httpTarget);
+var apiTarget = new HttpTarget(SampleApiUrl)
+    .Register(new CreateUserStep())
+    .Register(new CreateOrderStep())
+    .WithHeaders(new Dictionary<string, IFieldValue<string>>
+    {
+        ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+    });
+
+var context = new WorkflowContext();
+var runner = new HttpWorkflowRunner(context, stepName =>
+    stepName == "login"
+        ? (ITarget)loginTarget
+        : apiTarget);
 ```
 
 Any class that implements `ITarget` is a valid target:
@@ -294,11 +307,14 @@ public record AddressFields
 
 public record UpdateUserAddressRequest() : HttpWorkflowRequest<UpdateUserAddressResponse>("updateUserAddress")
 {
-    public override IReadOnlyDictionary<string, IFieldValue<string>> PathParams { get; init; } = new Dictionary<string, IFieldValue<string>>
-    {
-        ["userId"] = From(ctx => ctx.Get<UserResponse>("createUser").Id)
-    };
+    public IFieldValue<string>        UserId  { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<AddressFields> Address { get; init; } = Static(new AddressFields());
+}
+
+public class UpdateUserAddressStep : HttpStep<UpdateUserAddressRequest, UpdateUserAddressResponse>
+{
+    public override HttpMethod Method => HttpMethod.Put;
+    public override string Path => "/users/{userId}/address";  // {userId} auto-matched to UserId field; excluded from body
 }
 ```
 
@@ -675,39 +691,50 @@ Three levels of headers are supported, merged in order (later wins for matching 
 
 #### In C# (step-level)
 
-Override `Headers` on `HttpStep`:
+Override `MapHeaders` on `HttpStep`. It receives the resolved request fields and returns headers to add or override for that step. Step headers win over target headers for matching keys:
 
 ```csharp
 public class CreateItemStep : HttpStep<CreateItemRequest, ItemResponse>
 {
     public override HttpMethod Method => HttpMethod.Post;
     public override string Path => "/items";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["X-Api-Version"] = Static("2")
-        };
+    public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
+        => new() { ["X-Api-Version"] = "2" };
 }
 ```
 
-#### In C# (per-request)
-
-Pass `headers:` to `ExecuteAsync` or override `Headers` on the request with `with`:
+To drive a header from a request field (e.g. per-invocation values), add an `IFieldValue<string>` field to the request and read it in `MapHeaders`:
 
 ```csharp
-await ExecuteAsync(new CreateItemRequest(), headers: new() { ["X-Request-Id"] = myId });
+public record CreateItemRequest() : HttpWorkflowRequest<ItemResponse>("createItem")
+{
+    public IFieldValue<string> RequestId { get; init; } = Generated(() => Guid.NewGuid().ToString());
+}
+
+public class CreateItemStep : HttpStep<CreateItemRequest, ItemResponse>
+{
+    public override HttpMethod Method => HttpMethod.Post;
+    public override string Path => "/items";
+    public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
+        => new() { ["X-Request-Id"] = resolvedFields["RequestId"]?.ToString() ?? "" };
+}
 ```
 
-Or supply a target with headers via `WithTargetResolver`:
+At the call site, override the field with `with` as usual.
+
+#### In C# (target-level)
+
+Supply headers via `WithHeaders` when constructing the target. Use `From` for headers that depend on a prior step's response (e.g. auth):
 
 ```csharp
-new WorkflowContext().WithTargetResolver(_ =>
+new HttpWorkflowRunner(
+    new WorkflowContext(),
     new HttpTarget(SampleApiUrl)
-        .Register(new LoginStep())
-        // ... other steps
+        .Register(new CreateItemStep())
         .WithHeaders(new Dictionary<string, IFieldValue<string>>
         {
-            ["X-Tenant-Id"] = Static("acme")
+            ["X-Tenant-Id"]    = Static("acme"),
+            ["Authorization"]  = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
         }))
 ```
 

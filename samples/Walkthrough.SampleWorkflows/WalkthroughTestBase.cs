@@ -7,47 +7,37 @@ namespace Walkthrough.SampleWorkflows;
 public abstract class WalkthroughTestBase
 {
     private const string SampleApiUrl = "http://localhost:4200";
-    private readonly WorkflowContext _context;
+    private readonly HttpWorkflowRunner _runner;
 
     protected WalkthroughTestBase()
     {
-        _context = new WorkflowContext()
-            .WithTargetResolver(_ => new HttpTarget(SampleApiUrl)
-                .Register(new LoginStep())
-                .Register(new CreateUserStep())
-                .Register(new UpdateUserAddressStep())
-                .Register(new GetUsersByRoleStep())
-                .Register(new CreateOrderStep())
-                .Register(new GetOrderStep())
-                .Register(new EchoHeadersStep())
-                .Register(new EchoHeadersWithStepHeaderStep())
-                .Register(new EchoHeadersWithFromAuthStep()));
+        var context = new WorkflowContext();
+
+        var loginTarget = new HttpTarget(SampleApiUrl)
+            .Register(new LoginStep());
+
+        var apiTarget = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new UpdateUserAddressStep())
+            .Register(new GetUsersByRoleStep())
+            .Register(new CreateOrderStep())
+            .Register(new GetOrderStep())
+            .Register(new EchoHeadersStep())
+            .Register(new EchoHeadersWithStepHeaderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => ctx.HasCapture("login")
+                    ? $"Bearer {ctx.Get<LoginResponse>("login").Token}"
+                    : "")
+            });
+
+        _runner = new HttpWorkflowRunner(context,
+            stepName => stepName == "login" ? (ITarget)loginTarget : apiTarget);
     }
 
-    protected Task<TResponse> ExecuteAsync<TResponse>(
-        HttpWorkflowRequest<TResponse> request,
-        Dictionary<string, string>? query = null,
-        Dictionary<string, string>? pathParams = null,
-        Dictionary<string, string>? headers = null)
-    {
-        if (query is not null)
-            request = request with
-            {
-                Query = query.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
-            };
-        if (pathParams is not null)
-            request = request with
-            {
-                PathParams = pathParams.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
-            };
-        if (headers is not null)
-            request = request with
-            {
-                Headers = headers.ToDictionary(kv => kv.Key, kv => (IFieldValue<string>)Static(kv.Value))
-            };
-        return _context.ExecuteAsync(request);
-    }
+    protected Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
+        => _runner.ExecuteAsync(request);
 
     protected Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
-        => _context.BuildAsync(item);
+        => _runner.BuildAsync(item);
 }

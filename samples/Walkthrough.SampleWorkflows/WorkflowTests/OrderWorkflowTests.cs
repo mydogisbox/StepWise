@@ -75,7 +75,7 @@ public class GetOrder_UsesPathParam : WalkthroughTestBase
         var second = await ExecuteAsync(new CreateOrderRequest());
 
         // Explicitly retrieve the first order by id to verify path param routing
-        var retrieved = await ExecuteAsync(new GetOrderRequest(), pathParams: new() { ["orderId"] = first.Id });
+        var retrieved = await ExecuteAsync(new GetOrderRequest() with { OrderId = Static(first.Id) });
 
         Assert.Equal(first.Id, retrieved.Id);
         Assert.NotEqual(second.Id, retrieved.Id);
@@ -91,10 +91,8 @@ public class GetUsersByRole_UsesQueryParam : WalkthroughTestBase
         await ExecuteAsync(new CreateUserRequest() with { Role = Static("user") });
         await ExecuteAsync(new CreateUserRequest() with { Role = Static("admin") });
 
-        // Uses step default: Query = { "role" = "user" }
         var users  = await ExecuteAsync(new GetUsersByRoleRequest());
-        // Override per-call to get admins
-        var admins = await ExecuteAsync(new GetUsersByRoleRequest(), query: new() { ["role"] = "admin" });
+        var admins = await ExecuteAsync(new GetUsersByRoleRequest() with { Role = Static("admin") });
 
         Assert.All(users,  u => Assert.Equal("user",  u.Role));
         Assert.All(admins, u => Assert.Equal("admin", u.Role));
@@ -112,15 +110,15 @@ public class StepHeaders_ReceivedByServer : WalkthroughTestBase
     }
 }
 
-public class InvocationHeaders_ReceivedByServer : WalkthroughTestBase
+public class TargetAuthHeader_ReceivedByServer : WalkthroughTestBase
 {
     [Fact]
     public async Task Test()
     {
-        var echo = await ExecuteAsync(new EchoHeadersRequest(),
-            headers: new() { ["x-invocation-header"] = "from-invocation" });
+        await ExecuteAsync(new LoginRequest());
+        var echo = await ExecuteAsync(new EchoHeadersRequest());
 
-        Assert.Equal("from-invocation", echo["x-invocation-header"]);
+        Assert.StartsWith("Bearer ", echo["authorization"]);
     }
 }
 
@@ -168,18 +166,6 @@ public class BuildItem_ReturnsResolvedResponse : WalkthroughTestBase
     }
 }
 
-public class FromHeader_ConstructsBearerToken_ReceivedByServer : WalkthroughTestBase
-{
-    [Fact]
-    public async Task Test()
-    {
-        await ExecuteAsync(new LoginRequest());
-        var echo = await ExecuteAsync(new EchoHeadersWithFromAuthRequest());
-
-        Assert.StartsWith("Bearer ", echo["authorization"]);
-    }
-}
-
 // Demonstrates overriding MapBody to explicitly control which fields are sent in the HTTP body.
 // Useful when field names need transforming, or only a subset should be sent.
 public class MapBody_ExplicitFieldMapping_WorksCorrectly
@@ -189,12 +175,7 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
     private class ExplicitCreateUserStep : HttpStep<CreateUserRequest, UserResponse>
     {
         public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/users";
-        public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-            new Dictionary<string, IFieldValue<string>>
-            {
-                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-            };
+        public override string     Path   => "/users";
 
         public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
         {
@@ -208,13 +189,21 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
     [Fact]
     public async Task Test()
     {
-        var target = new HttpTarget(SampleApiUrl)
-            .Register(new LoginStep())
-            .Register(new ExplicitCreateUserStep());
-        var context = new WorkflowContext().WithTargetResolver(_ => target);
+        var context = new WorkflowContext();
 
-        await context.ExecuteAsync(new LoginRequest());
-        var user = await context.ExecuteAsync(new CreateUserRequest());
+        var loginTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var apiTarget   = new HttpTarget(SampleApiUrl)
+            .Register(new ExplicitCreateUserStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+
+        var runner = new HttpWorkflowRunner(context,
+            stepName => stepName == "login" ? (ITarget)loginTarget : apiTarget);
+
+        await runner.ExecuteAsync(new LoginRequest());
+        var user = await runner.ExecuteAsync(new CreateUserRequest());
 
         Assert.NotEmpty(user.Id);
         Assert.Equal("Test", user.FirstName);
@@ -275,17 +264,22 @@ public class Login_ViaCustomTarget_CanPlaceOrder
     {
         var httpTarget = new HttpTarget(SampleApiUrl)
             .Register(new CreateUserStep())
-            .Register(new CreateOrderStep());
+            .Register(new CreateOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
 
-        var context = new WorkflowContext().WithTargetResolver(stepName =>
-            stepName == "login"
+        var runner = new HttpWorkflowRunner(
+            new WorkflowContext(),
+            stepName => stepName == "login"
                 ? (ITarget)new DirectLoginTarget(SampleApiUrl)
                 : httpTarget);
 
-        await context.ExecuteAsync(new LoginRequest());
-        await context.ExecuteAsync(new CreateUserRequest());
-        await context.BuildAsync(new AddOrderItem());
-        var order = await context.ExecuteAsync(new CreateOrderRequest());
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
+        await runner.BuildAsync(new AddOrderItem());
+        var order = await runner.ExecuteAsync(new CreateOrderRequest());
 
         Assert.Equal("pending", order.Status);
         Assert.Single(order.Items);

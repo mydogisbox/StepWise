@@ -1,12 +1,13 @@
 using System.Net;
 using System.Text.Json;
 using Walkthrough.Core;
+using Walkthrough.Http;
 using Walkthrough.Json;
 using Xunit;
 
 namespace Walkthrough.UnitTests;
 
-// ── WorkflowContext.PollAsync ────────────────────────────────────────────────
+// ── HttpWorkflowRunner.PollAsync ─────────────────────────────────────────────
 
 public class WorkflowContextPollTests
 {
@@ -33,8 +34,8 @@ public class WorkflowContextPollTests
         var fake = new FakeTarget();
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var context = new WorkflowContext().WithTargetResolver(_ => fake);
-        var result = await context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed");
+        var runner = new HttpWorkflowRunner(new WorkflowContext(), _ => fake);
+        var result = await runner.PollAsync(new GetStatusRequest(), r => r.Status == "Completed");
 
         Assert.Equal("Completed", result.Status);
         Assert.Equal(1, fake.CallCount);
@@ -48,8 +49,8 @@ public class WorkflowContextPollTests
         fake.Enqueue(new StatusResponse("Pending"));
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var context = new WorkflowContext().WithTargetResolver(_ => fake);
-        var result = await context.PollAsync(
+        var runner = new HttpWorkflowRunner(new WorkflowContext(), _ => fake);
+        var result = await runner.PollAsync(
             new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
 
         Assert.Equal("Completed", result.Status);
@@ -62,9 +63,9 @@ public class WorkflowContextPollTests
         var fake = new FakeTarget();
         for (var i = 0; i < 10; i++) fake.Enqueue(new StatusResponse("Pending"));
 
-        var context = new WorkflowContext().WithTargetResolver(_ => fake);
+        var runner = new HttpWorkflowRunner(new WorkflowContext(), _ => fake);
         var ex = await Assert.ThrowsAsync<WorkflowContextException>(() =>
-            context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed",
+            runner.PollAsync(new GetStatusRequest(), r => r.Status == "Completed",
                 intervalMs: 10, timeoutMs: 50));
 
         Assert.Contains("getStatus", ex.Message);
@@ -77,8 +78,9 @@ public class WorkflowContextPollTests
         fake.Enqueue(new StatusResponse("Pending"));
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var context = new WorkflowContext().WithTargetResolver(_ => fake);
-        await context.PollAsync(new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
+        var context = new WorkflowContext();
+        var runner  = new HttpWorkflowRunner(context, _ => fake);
+        await runner.PollAsync(new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
 
         Assert.Equal("Completed", context.Get<StatusResponse>("getStatus").Status);
     }

@@ -1,4 +1,3 @@
-using Walkthrough.Core;
 using Walkthrough.Http;
 using static Walkthrough.Core.FieldValues;
 
@@ -9,7 +8,7 @@ public record EchoHeadersRequest() : HttpWorkflowRequest<Dictionary<string, stri
 public class EchoHeadersStep : HttpStep<EchoHeadersRequest, Dictionary<string, string>>
 {
     public override HttpMethod Method => HttpMethod.Get;
-    public override string Path => "/echo/headers";
+    public override string     Path   => "/echo/headers";
 }
 
 public record EchoHeadersWithStepHeaderRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeadersWithStepHeader");
@@ -17,20 +16,8 @@ public record EchoHeadersWithStepHeaderRequest() : HttpWorkflowRequest<Dictionar
 public class EchoHeadersWithStepHeaderStep : HttpStep<EchoHeadersWithStepHeaderRequest, Dictionary<string, string>>
 {
     public override HttpMethod Method => HttpMethod.Get;
-    public override string Path => "/echo/headers";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>> { ["x-step-header"] = Static("from-step") };
-}
+    public override string     Path   => "/echo/headers";
 
-public record EchoHeadersWithFromAuthRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeadersWithFromAuth");
-
-public class EchoHeadersWithFromAuthStep : HttpStep<EchoHeadersWithFromAuthRequest, Dictionary<string, string>>
-{
-    public override HttpMethod Method => HttpMethod.Get;
-    public override string Path => "/echo/headers";
-    public override IReadOnlyDictionary<string, IFieldValue<string>> Headers { get; } =
-        new Dictionary<string, IFieldValue<string>>
-        {
-            ["authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
-        };
+    public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
+        => new() { ["x-step-header"] = "from-step" };
 }

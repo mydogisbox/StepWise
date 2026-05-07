@@ -1,0 +1,96 @@
+using System.Text.Json;
+using Walkthrough.Core;
+
+namespace Walkthrough.Http;
+
+/// <summary>
+/// Executes workflow steps against HTTP targets, handles polling, and accumulates build items.
+/// Each runner holds a WorkflowContext for shared state and a resolver that maps step names to targets.
+/// </summary>
+public class HttpWorkflowRunner
+{
+    private readonly WorkflowContext _context;
+    private readonly Func<string, ITarget>? _resolver;
+
+    private static readonly JsonSerializerOptions _jsonOptions =
+        new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>Routes all steps to a single HttpTarget.</summary>
+    public HttpWorkflowRunner(WorkflowContext context, HttpTarget target)
+    {
+        _context  = context;
+        _resolver = _ => target;
+    }
+
+    /// <summary>Routes each step to the target returned by the resolver.</summary>
+    public HttpWorkflowRunner(WorkflowContext context, Func<string, ITarget> resolver)
+    {
+        _context  = context;
+        _resolver = resolver;
+    }
+
+    /// <summary>Build-only runner — ExecuteAsync will throw if called.</summary>
+    public HttpWorkflowRunner(WorkflowContext context)
+    {
+        _context  = context;
+        _resolver = null;
+    }
+
+    /// <summary>
+    /// Executes a request against the resolved target, captures the response, and returns it.
+    /// </summary>
+    public async Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
+    {
+        if (_resolver is null)
+            throw new WorkflowContextException(
+                "No target resolver registered. Provide an HttpTarget or resolver when constructing HttpWorkflowRunner.");
+
+        var target   = _resolver(request.StepName);
+        var response = await target.ExecuteAsync(request, _context);
+
+        _context.CaptureRaw(request.StepName, response!);
+        return response;
+    }
+
+    /// <summary>
+    /// Repeatedly executes a request until <paramref name="until"/> returns true
+    /// or <paramref name="timeoutMs"/> elapses, with <paramref name="intervalMs"/> between attempts.
+    /// </summary>
+    public async Task<TResponse> PollAsync<TResponse>(
+        WorkflowRequest<TResponse> request,
+        Func<TResponse, bool> until,
+        int intervalMs = 500,
+        int timeoutMs  = 10000)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        while (true)
+        {
+            var response = await ExecuteAsync(request);
+            if (until(response)) return response;
+
+            var remaining = timeoutMs - sw.ElapsedMilliseconds;
+
+            if (remaining <= 0)
+                throw new WorkflowContextException(
+                    $"PollAsync timed out after {timeoutMs}ms waiting for step '{request.StepName}'.");
+
+            await Task.Delay((int)Math.Min(intervalMs, remaining));
+        }
+    }
+
+    /// <summary>
+    /// Resolves all field values on the build item, appends the resolved dictionary to the
+    /// accumulation, captures the individual result, and returns a typed snapshot.
+    /// </summary>
+    public Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
+    {
+        var resolved = FieldValueResolver.ResolveObject(item, _context);
+        _context.Accumulate(item.AccumulationKey, resolved);
+
+        var json     = JsonSerializer.Serialize(resolved);
+        var response = JsonSerializer.Deserialize<TResponse>(json, _jsonOptions)!;
+        _context.CaptureRaw(item.BuildableName, response!);
+        return Task.FromResult(response);
+    }
+}
