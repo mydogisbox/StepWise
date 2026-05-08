@@ -247,7 +247,7 @@ public class BuildableRequestAccumulationTests
 
     private record OrderRequest() : WorkflowRequest<FakeResponse>("createOrder")
     {
-        public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
+        public IFieldValue<List<object>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
     }
 
     private static (WorkflowContext ctx, WorkflowRunner runner) Make()
@@ -295,7 +295,7 @@ public class BuildableRequestAccumulationTests
     }
 
     [Fact]
-    public async Task GetAccumulated_ReturnsResolvedDicts()
+    public async Task GetAccumulated_ReturnsTypedResponses()
     {
         var (ctx, runner) = Make();
         await runner.BuildAsync(new LineItem());
@@ -304,10 +304,12 @@ public class BuildableRequestAccumulationTests
         var items = ctx.GetAccumulated<LineItem>();
 
         Assert.Equal(2, items.Count);
-        Assert.Equal("Widget", items[0]["Name"]);
-        Assert.Equal(1, items[0]["Count"]);
-        Assert.Equal("Gadget", items[1]["Name"]);
-        Assert.Equal(3, items[1]["Count"]);
+        var first  = Assert.IsType<LineItemResponse>(items[0]);
+        var second = Assert.IsType<LineItemResponse>(items[1]);
+        Assert.Equal("Widget", first.Name);
+        Assert.Equal(1,        first.Count);
+        Assert.Equal("Gadget", second.Name);
+        Assert.Equal(3,        second.Count);
     }
 
     [Fact]
@@ -321,12 +323,12 @@ public class BuildableRequestAccumulationTests
 
         var items = Assert.IsType<List<object?>>(resolved["Items"]);
         Assert.Equal(2, items.Count);
-        var first  = Assert.IsType<Dictionary<string, object?>>(items[0]);
-        var second = Assert.IsType<Dictionary<string, object?>>(items[1]);
-        Assert.Equal("Widget", first["Name"]);
-        Assert.Equal(2, first["Count"]);
-        Assert.Equal("Gadget", second["Name"]);
-        Assert.Equal(5, second["Count"]);
+        var first  = Assert.IsType<LineItemResponse>(items[0]);
+        var second = Assert.IsType<LineItemResponse>(items[1]);
+        Assert.Equal("Widget", first.Name);
+        Assert.Equal(2,        first.Count);
+        Assert.Equal("Gadget", second.Name);
+        Assert.Equal(5,        second.Count);
     }
 
     [Fact]
@@ -339,8 +341,8 @@ public class BuildableRequestAccumulationTests
         var items = ctx.GetAccumulated<LineItem>();
 
         Assert.Equal(2, items.Count);
-        Assert.Equal("Widget", items[0]["Name"]);
-        Assert.Equal("Gadget", items[1]["Name"]);
+        Assert.Equal("Widget", Assert.IsType<LineItemResponse>(items[0]).Name);
+        Assert.Equal("Gadget", Assert.IsType<LineItemResponse>(items[1]).Name);
     }
 
     private record BaseItemResponse(string Kind);
@@ -367,8 +369,8 @@ public class BuildableRequestAccumulationTests
         var items = ctx.GetAccumulated<BaseItem>();
 
         Assert.Equal(2, items.Count);
-        Assert.Equal("alpha", items[0]["Kind"]);
-        Assert.Equal("beta",  items[1]["Kind"]);
+        Assert.Equal("alpha", Assert.IsType<BaseItemResponse>(items[0]).Kind);
+        Assert.Equal("beta",  Assert.IsType<BaseItemResponse>(items[1]).Kind);
     }
 }
 

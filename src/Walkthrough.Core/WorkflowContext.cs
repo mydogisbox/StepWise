@@ -11,30 +11,30 @@ public class WorkflowContext
     private readonly Dictionary<Type, List<object>> _accumulated = new();
 
     /// <summary>
-    /// Appends a resolved build item to the accumulation list for the given key.
+    /// Appends a typed build result to the accumulation list for the given key.
     /// Called by runners during BuildAsync.
     /// </summary>
-    public void Accumulate(Type key, Dictionary<string, object?> item)
+    public void Accumulate(Type key, object response)
     {
         if (!_accumulated.TryGetValue(key, out var list))
         {
-            list = new List<object>();
+            list = [];
             _accumulated[key] = list;
         }
-        list.Add(item);
+        list.Add(response);
     }
 
     /// <summary>
-    /// Returns all accumulated resolved dictionaries for the given item type,
+    /// Returns all accumulated build results for the given item type as typed objects,
     /// then clears the accumulation. Returns an empty list if nothing has been accumulated.
     /// </summary>
-    public List<Dictionary<string, object?>> GetAccumulated<TItem>() where TItem : BuildableRequest
+    public List<object> GetAccumulated<TItem>() where TItem : BuildableRequest
     {
         if (!_accumulated.TryGetValue(typeof(TItem), out var list))
             return [];
 
         _accumulated.Remove(typeof(TItem));
-        return list.Cast<Dictionary<string, object?>>().ToList();
+        return list;
     }
 
     /// <summary>

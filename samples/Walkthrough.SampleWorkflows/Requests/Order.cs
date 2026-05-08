@@ -19,7 +19,7 @@ public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
 public record CreateOrderRequest() : HttpWorkflowRequest<OrderResponse>("createOrder")
 {
     public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
-    public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
+    public IFieldValue<List<object>> Items { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
 public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>

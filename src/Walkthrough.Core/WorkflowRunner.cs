@@ -85,10 +85,9 @@ public class WorkflowRunner
     public Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
     {
         var resolved = FieldValueResolver.ResolveObject(item, _context);
-        _context.Accumulate(item.AccumulationKey, resolved);
-
         var json     = JsonSerializer.Serialize(resolved);
         var response = JsonSerializer.Deserialize<TResponse>(json, _jsonOptions)!;
+        _context.Accumulate(item.AccumulationKey, response!);
         _context.CaptureRaw(item.BuildableName, response!);
         return Task.FromResult(response);
     }

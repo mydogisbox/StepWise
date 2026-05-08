@@ -143,7 +143,7 @@ public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
 public record CreateOrderRequest() : HttpWorkflowRequest<OrderResponse>("createOrder")
 {
     public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
-    public IFieldValue<List<Dictionary<string, object?>>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
+    public IFieldValue<List<object>> Items { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
 public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
@@ -382,14 +382,14 @@ Assert.Equal("US",          result.Address.Region.Country);  // default preserve
 
 ### Building an array
 
-`BuildAsync` resolves all `IFieldValue<T>` properties immediately, appends the resolved dictionary to the accumulation, and returns a typed `TResponse` snapshot. `GetAccumulated<TItem>()` returns the accumulated `List<Dictionary<string, object?>>` of already-resolved values and **clears the accumulation** — subsequent calls return an empty list until more items are built. Resolution happens once at build time — not again when the request is sent.
+`BuildAsync` resolves all `IFieldValue<T>` properties immediately, stores the typed `TResponse` in the accumulation, and returns that same snapshot. `GetAccumulated<TItem>()` returns `List<object>` — each element is the concrete `TResponse` produced by `BuildAsync` — and **clears the accumulation**. Subsequent calls return an empty list until more items are built. Resolution happens once at build time — not again when the request is sent.
 
-`ResolveRecursively` always boxes lists as `List<object?>`, not `List<Dictionary<string, object?>>`. A `From` lambda that returns `List<Dictionary<string, object?>>` (e.g. from `GetAccumulated`) will be re-boxed when resolved. In `MapBody`, cast accumulated fields to `List<object?>`:
+`ResolveRecursively` always boxes lists as `List<object?>`. A `From` lambda that returns `List<object>` (e.g. from `GetAccumulated`) will be re-boxed when resolved. In `MapBody`, cast accumulated fields to `List<object?>`:
 
 ```csharp
 public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
 {
-    ["Commands"] = (List<object?>)resolvedFields["Commands"],  // not List<Dictionary<string, object?>>
+    ["Commands"] = (List<object?>)resolvedFields["Commands"],
 };
 ```
 
