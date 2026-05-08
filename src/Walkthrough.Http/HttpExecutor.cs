@@ -13,9 +13,10 @@ public static class HttpExecutor
 {
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy         = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy          = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive  = true,
+        DefaultIgnoreCondition       = JsonIgnoreCondition.WhenWritingNull,
     };
 
     private static readonly HttpClient SharedClient =
