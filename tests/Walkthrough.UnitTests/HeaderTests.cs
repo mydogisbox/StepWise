@@ -228,8 +228,8 @@ public class HttpTargetHeaderTests : IDisposable
 
     private HttpTarget Target() => new HttpTarget($"http://127.0.0.1:{_port}");
 
-    private HttpWorkflowRunner Runner(HttpTarget target) =>
-        new HttpWorkflowRunner(new WorkflowContext(), target);
+    private WorkflowRunner Runner(HttpTarget target) =>
+        new WorkflowRunner(new WorkflowContext(), target);
 
     [Fact]
     public async Task WithHeaders_SentWithRequest()
@@ -307,7 +307,7 @@ public class HttpTargetHeaderTests : IDisposable
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<FakeTokenResponse>("login").Token}")
             });
-        var runner = new HttpWorkflowRunner(new WorkflowContext(), stepName =>
+        var runner = new WorkflowRunner(new WorkflowContext(), stepName =>
             stepName == "login" ? (ITarget)fakeLogin : httpTarget);
 
         await runner.ExecuteAsync(new FakeLoginRequest());

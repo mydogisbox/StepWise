@@ -1,13 +1,12 @@
 using System.Text.Json;
-using Walkthrough.Core;
 
-namespace Walkthrough.Http;
+namespace Walkthrough.Core;
 
 /// <summary>
-/// Executes workflow steps against HTTP targets, handles polling, and accumulates build items.
+/// Executes workflow steps against targets, handles polling, and accumulates build items.
 /// Each runner holds a WorkflowContext for shared state and a resolver that maps step names to targets.
 /// </summary>
-public class HttpWorkflowRunner
+public class WorkflowRunner
 {
     private readonly WorkflowContext _context;
     private readonly Func<string, ITarget>? _resolver;
@@ -15,22 +14,22 @@ public class HttpWorkflowRunner
     private static readonly JsonSerializerOptions _jsonOptions =
         new() { PropertyNameCaseInsensitive = true };
 
-    /// <summary>Routes all steps to a single HttpTarget.</summary>
-    public HttpWorkflowRunner(WorkflowContext context, HttpTarget target)
+    /// <summary>Routes all steps to a single target.</summary>
+    public WorkflowRunner(WorkflowContext context, ITarget target)
     {
         _context  = context;
         _resolver = _ => target;
     }
 
     /// <summary>Routes each step to the target returned by the resolver.</summary>
-    public HttpWorkflowRunner(WorkflowContext context, Func<string, ITarget> resolver)
+    public WorkflowRunner(WorkflowContext context, Func<string, ITarget> resolver)
     {
         _context  = context;
         _resolver = resolver;
     }
 
     /// <summary>Build-only runner — ExecuteAsync will throw if called.</summary>
-    public HttpWorkflowRunner(WorkflowContext context)
+    public WorkflowRunner(WorkflowContext context)
     {
         _context  = context;
         _resolver = null;
@@ -43,7 +42,7 @@ public class HttpWorkflowRunner
     {
         if (_resolver is null)
             throw new WorkflowContextException(
-                "No target resolver registered. Provide an HttpTarget or resolver when constructing HttpWorkflowRunner.");
+                "No target resolver registered. Provide a target or resolver when constructing WorkflowRunner.");
 
         var target   = _resolver(request.StepName);
         var response = await target.ExecuteAsync(request, _context);

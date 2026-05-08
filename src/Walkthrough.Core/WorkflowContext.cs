@@ -3,7 +3,7 @@ namespace Walkthrough.Core;
 /// <summary>
 /// Pure state bag shared across all steps in a workflow execution.
 /// Stores step responses and build-step accumulations.
-/// Execution is handled by a runner such as HttpWorkflowRunner.
+/// Execution is handled by a runner such as WorkflowRunner.
 /// </summary>
 public class WorkflowContext
 {

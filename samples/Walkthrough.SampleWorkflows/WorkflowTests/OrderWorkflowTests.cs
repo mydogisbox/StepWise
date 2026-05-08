@@ -199,7 +199,7 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
             });
 
-        var runner = new HttpWorkflowRunner(context,
+        var runner = new WorkflowRunner(context,
             stepName => stepName == "login" ? (ITarget)loginTarget : apiTarget);
 
         await runner.ExecuteAsync(new LoginRequest());
@@ -270,7 +270,7 @@ public class Login_ViaCustomTarget_CanPlaceOrder
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
             });
 
-        var runner = new HttpWorkflowRunner(
+        var runner = new WorkflowRunner(
             new WorkflowContext(),
             stepName => stepName == "login"
                 ? (ITarget)new DirectLoginTarget(SampleApiUrl)
@@ -280,6 +280,146 @@ public class Login_ViaCustomTarget_CanPlaceOrder
         await runner.ExecuteAsync(new CreateUserRequest());
         await runner.BuildAsync(new AddOrderItem());
         var order = await runner.ExecuteAsync(new CreateOrderRequest());
+
+        Assert.Equal("pending", order.Status);
+        Assert.Single(order.Items);
+    }
+}
+
+// Demonstrates three targets routed by step name:
+//   authTarget  — HttpTarget for login
+//   apiTarget   — HttpTarget for create steps, auth via WithHeaders
+//   directTarget — plain ITarget wrapping a raw HttpClient call for getOrder
+// Captures flow freely across all three: the token from authTarget is read by
+// directTarget, and the order id from apiTarget is resolved into the GET URL.
+public class ThreeTargets_HttpAndDirectMixed
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    private class DirectGetOrderTarget(string baseUrl) : ITarget
+    {
+        private static readonly HttpClient _http = new();
+        private static readonly JsonSerializerOptions _readOptions =
+            new() { PropertyNameCaseInsensitive = true };
+
+        public async Task<TResponse> ExecuteAsync<TResponse>(
+            WorkflowRequest<TResponse> request, WorkflowContext context)
+        {
+            var fields  = FieldValueResolver.Resolve(request, context);
+            var orderId = fields["OrderId"]?.ToString();
+            var token   = context.Get<LoginResponse>("login").Token;
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/orders/{orderId}");
+            httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+
+            var response = await _http.SendAsync(httpRequest);
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<TResponse>(json, _readOptions)!;
+        }
+    }
+
+    [Fact]
+    public async Task Test()
+    {
+        var authTarget   = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var apiTarget    = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new CreateOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+        var directTarget = new DirectGetOrderTarget(SampleApiUrl);
+
+        var runner = new WorkflowRunner(
+            new WorkflowContext(),
+            stepName => stepName switch
+            {
+                "login"    => (ITarget)authTarget,
+                "getOrder" => directTarget,
+                _          => apiTarget
+            });
+
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
+        await runner.BuildAsync(new AddOrderItem());
+        var created   = await runner.ExecuteAsync(new CreateOrderRequest());
+        var retrieved = await runner.ExecuteAsync(new GetOrderRequest());
+
+        Assert.Equal(created.Id, retrieved.Id);
+        Assert.Equal("pending",  retrieved.Status);
+    }
+}
+
+// Demonstrates that a workflow function is target-agnostic.
+// PlaceOrder takes only a resolver — the runner is constructed inside.
+// The same function runs unchanged against two different target configurations:
+// one using registered HttpStep classes, one using a raw HttpClient for login.
+public class SameWorkflow_DifferentTargetImplementations
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    private static async Task<OrderResponse> PlaceOrder(Func<string, ITarget> resolver)
+    {
+        var runner = new WorkflowRunner(new WorkflowContext(), resolver);
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
+        await runner.BuildAsync(new AddOrderItem());
+        return await runner.ExecuteAsync(new CreateOrderRequest());
+    }
+
+    // Login via a raw HttpClient call; remaining steps via registered HttpStep classes.
+    private class DirectLoginTarget(string baseUrl) : ITarget
+    {
+        private static readonly HttpClient _http = new();
+
+        public async Task<TResponse> ExecuteAsync<TResponse>(
+            WorkflowRequest<TResponse> request, WorkflowContext context)
+        {
+            var fields  = FieldValueResolver.Resolve(request, context);
+            var content = new StringContent(
+                JsonSerializer.Serialize(fields, HttpExecutor.JsonOptions), Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync($"{baseUrl}/auth/login", content);
+            response.EnsureSuccessStatusCode();
+            return HttpExecutor.Deserialize<TResponse>(await response.Content.ReadAsStringAsync());
+        }
+    }
+
+    [Fact]
+    public async Task ViaRegisteredSteps()
+    {
+        var authTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var apiTarget  = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new CreateOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+
+        var order = await PlaceOrder(
+            stepName => stepName == "login" ? (ITarget)authTarget : apiTarget);
+
+        Assert.Equal("pending", order.Status);
+        Assert.Single(order.Items);
+    }
+
+    [Fact]
+    public async Task ViaCustomLoginTarget()
+    {
+        var apiTarget = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new CreateOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+
+        var order = await PlaceOrder(
+            stepName => stepName == "login"
+                ? (ITarget)new DirectLoginTarget(SampleApiUrl)
+                : apiTarget);
 
         Assert.Equal("pending", order.Status);
         Assert.Single(order.Items);

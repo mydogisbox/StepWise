@@ -45,7 +45,7 @@ public class WorkflowContextTests
     public async Task Get_ThrowsDescriptiveException_WhenStepNotFound()
     {
         var context = new WorkflowContext();
-        var runner  = new HttpWorkflowRunner(context, _ => new FakeTarget());
+        var runner  = new WorkflowRunner(context, _ => new FakeTarget());
         await runner.ExecuteAsync(new FakeRequest());
 
         var ex = Assert.Throws<WorkflowContextException>(
@@ -250,10 +250,10 @@ public class BuildableRequestAccumulationTests
         public IFieldValue<List<Dictionary<string, object?>>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
     }
 
-    private static (WorkflowContext ctx, HttpWorkflowRunner runner) Make()
+    private static (WorkflowContext ctx, WorkflowRunner runner) Make()
     {
         var ctx = new WorkflowContext();
-        return (ctx, new HttpWorkflowRunner(ctx));
+        return (ctx, new WorkflowRunner(ctx));
     }
 
     [Fact]
@@ -488,7 +488,7 @@ public class MultiTargetWorkflowTests
         var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
 
         var context = new WorkflowContext();
-        var runner  = new HttpWorkflowRunner(context,
+        var runner  = new WorkflowRunner(context,
             n => n == "login" ? (ITarget)loginTarget : userTarget);
 
         await runner.ExecuteAsync(new LoginRequest());
@@ -505,7 +505,7 @@ public class MultiTargetWorkflowTests
         var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
 
         var context = new WorkflowContext();
-        var runner  = new HttpWorkflowRunner(context,
+        var runner  = new WorkflowRunner(context,
             n => n == "login" ? (ITarget)loginTarget : userTarget);
 
         await runner.ExecuteAsync(new LoginRequest());
@@ -522,7 +522,7 @@ public class MultiTargetWorkflowTests
         var userTarget  = new CountingFakeTarget<UserResponse>(new UserResponse("u1"));
 
         var context = new WorkflowContext();
-        var runner  = new HttpWorkflowRunner(context,
+        var runner  = new WorkflowRunner(context,
             n => n == "login" ? (ITarget)loginTarget : userTarget);
 
         await runner.ExecuteAsync(new LoginRequest());

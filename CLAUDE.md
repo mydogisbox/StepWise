@@ -32,14 +32,15 @@ Walkthrough.Core
 ├── BuildableRequest               — non-generic marker base for array item builders
 ├── BuildableRequest<TResponse>    — generic base; TResponse is the resolved snapshot type returned by BuildAsync
 ├── WorkflowContext                — pure state bag: captures and accumulations only; no execution logic
+├── ITarget                        — execute a request against a target; implemented by HttpTarget or any custom class
+├── WorkflowRunner                 — orchestrates execution: ExecuteAsync, PollAsync, BuildAsync
 ├── IFieldValue<T>                 — interface for resolvable field values
 ├── FieldValues                    — Static(), Generated(), From() factories
 └── FieldValueResolver             — reflection-based resolver
 
 Walkthrough.Http
 ├── HttpWorkflowRequest<TResponse> — marker base for HTTP requests; carries only body fields (StepName only)
-├── HttpWorkflowRunner             — executes steps, polls, and accumulates build items; owns ExecuteAsync/BuildAsync/PollAsync
-├── HttpTarget                     — sends requests over HTTP; steps registered explicitly via Register()
+├── HttpTarget : ITarget           — sends requests over HTTP; steps registered explicitly via Register()
 ├── HttpExecutor                   — shared HTTP send/deserialize logic
 └── HttpStep<TRequest, TResponse>  — declares Method, Path, MapBody, MapQuery, and MapHeaders for one request type
 
@@ -217,7 +218,7 @@ var admins = await ExecuteAsync(new GetUsersByRoleRequest() with { Role = Static
 
 ### Test class
 
-xUnit creates a new instance per class — each test gets a fresh `HttpWorkflowRunner` (and `WorkflowContext`) with no shared state:
+xUnit creates a new instance per class — each test gets a fresh `WorkflowRunner` (and `WorkflowContext`) with no shared state:
 
 ```csharp
 public class PlacedOrder_CanBeRetrieved : WalkthroughTestBase
@@ -239,12 +240,14 @@ public class PlacedOrder_CanBeRetrieved : WalkthroughTestBase
 
 ### Custom targets and multi-target routing
 
-`HttpWorkflowRunner` accepts a resolver function that maps step names to targets. The resolver receives the step name and returns any `ITarget` — `HttpTarget`, or a custom class implementing `ITarget`.
+`WorkflowRunner` (in `Walkthrough.Core`) is target-agnostic — it routes each step to whatever `ITarget` the resolver returns, then captures the response. `HttpTarget` is one implementation of `ITarget`; any class can implement the interface to wrap an SDK, a raw `HttpClient` call, or an in-memory stub.
 
-Use this to route different steps to different services, or to swap in a hand-rolled implementation for a specific step. It is also the standard pattern for auth headers — split login onto a plain target and put auth in `WithHeaders` on the API target so login itself doesn't receive auth headers:
+All captures are shared through the same `WorkflowContext` regardless of which target produced them. A `From` lambda can read captures from any prior step, even one that ran against a different target.
+
+The standard pattern for auth headers is two `HttpTarget` instances — login on a plain target, everything else on a target with `WithHeaders`:
 
 ```csharp
-var loginTarget = new HttpTarget(SampleApiUrl)
+var authTarget = new HttpTarget(SampleApiUrl)
     .Register(new LoginStep());
 
 var apiTarget = new HttpTarget(SampleApiUrl)
@@ -255,35 +258,75 @@ var apiTarget = new HttpTarget(SampleApiUrl)
         ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
     });
 
-var context = new WorkflowContext();
-var runner = new HttpWorkflowRunner(context, stepName =>
-    stepName == "login"
-        ? (ITarget)loginTarget
-        : apiTarget);
+var runner = new WorkflowRunner(new WorkflowContext(), stepName =>
+    stepName == "login" ? (ITarget)authTarget : apiTarget);
 ```
 
-Any class that implements `ITarget` is a valid target:
+Custom `ITarget` implementations can be mixed into the same resolver. A custom target receives the raw `WorkflowRequest` and the shared `WorkflowContext` — it can call `FieldValueResolver.Resolve` to get the resolved fields and read any prior capture from the context:
 
 ```csharp
-private class DirectLoginTarget(string baseUrl) : ITarget
+private class DirectGetOrderTarget(string baseUrl) : ITarget
 {
     private static readonly HttpClient _http = new();
 
     public async Task<TResponse> ExecuteAsync<TResponse>(
         WorkflowRequest<TResponse> request, WorkflowContext context)
     {
-        var fields = FieldValueResolver.Resolve(request, context);
-        var content = new StringContent(
-            JsonSerializer.Serialize(fields), Encoding.UTF8, "application/json");
-        var response = await _http.PostAsync($"{baseUrl}/auth/login", content);
+        var fields  = FieldValueResolver.Resolve(request, context);
+        var orderId = fields["OrderId"]?.ToString();
+        var token   = context.Get<LoginResponse>("login").Token;  // capture from a different target
+
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/orders/{orderId}");
+        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+
+        var response = await _http.SendAsync(req);
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<TResponse>(json, _readOptions)!;
     }
 }
+
+// Three targets, one runner — captures flow freely across all of them
+var runner = new WorkflowRunner(new WorkflowContext(), stepName => stepName switch
+{
+    "login"    => (ITarget)authTarget,
+    "getOrder" => new DirectGetOrderTarget(SampleApiUrl),
+    _          => apiTarget
+});
 ```
 
-All captures are shared through the same `WorkflowContext` regardless of which target produced them. A `From` lambda on a request for target B can freely reference captures produced by target A.
+This is also the mechanism for swapping implementations — route a step to an SDK wrapper or a stub by changing the resolver, with no changes to the workflow code.
+
+### Workflows as functions
+
+A workflow can be extracted into a plain function that takes `Func<string, ITarget>` and constructs its own runner. This makes the workflow completely target-agnostic — the same function runs unchanged against any combination of targets:
+
+```csharp
+private static async Task<OrderResponse> PlaceOrder(Func<string, ITarget> resolver)
+{
+    var runner = new WorkflowRunner(new WorkflowContext(), resolver);
+    await runner.ExecuteAsync(new LoginRequest());
+    await runner.ExecuteAsync(new CreateUserRequest());
+    await runner.BuildAsync(new AddOrderItem());
+    return await runner.ExecuteAsync(new CreateOrderRequest());
+}
+
+// Via registered HttpStep classes
+var authTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+var apiTarget  = new HttpTarget(SampleApiUrl)
+    .Register(new CreateUserStep())
+    .Register(new CreateOrderStep())
+    .WithHeaders(...);
+
+await PlaceOrder(stepName => stepName == "login" ? (ITarget)authTarget : apiTarget);
+
+// Via a custom ITarget for login — same workflow function, different resolver
+await PlaceOrder(stepName => stepName == "login"
+    ? (ITarget)new DirectLoginTarget(SampleApiUrl)
+    : apiTarget);
+```
+
+The workflow function knows nothing about how steps execute — it only names the steps and asserts on the results.
 
 ### Field value resolution
 
@@ -727,7 +770,7 @@ At the call site, override the field with `with` as usual.
 Supply headers via `WithHeaders` when constructing the target. Use `From` for headers that depend on a prior step's response (e.g. auth):
 
 ```csharp
-new HttpWorkflowRunner(
+new WorkflowRunner(
     new WorkflowContext(),
     new HttpTarget(SampleApiUrl)
         .Register(new CreateItemStep())

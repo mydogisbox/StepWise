@@ -7,7 +7,7 @@ namespace Walkthrough.SampleWorkflows;
 public abstract class WalkthroughTestBase
 {
     private const string SampleApiUrl = "http://localhost:4200";
-    private readonly HttpWorkflowRunner _runner;
+    private readonly WorkflowRunner _runner;
 
     protected WalkthroughTestBase()
     {
@@ -31,7 +31,7 @@ public abstract class WalkthroughTestBase
                     : "")
             });
 
-        _runner = new HttpWorkflowRunner(context,
+        _runner = new WorkflowRunner(context,
             stepName => stepName == "login" ? (ITarget)loginTarget : apiTarget);
     }
 

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Walkthrough.UnitTests;
 
-// ── HttpWorkflowRunner.PollAsync ─────────────────────────────────────────────
+// ── WorkflowRunner.PollAsync ─────────────────────────────────────────────
 
 public class WorkflowContextPollTests
 {
@@ -34,7 +34,7 @@ public class WorkflowContextPollTests
         var fake = new FakeTarget();
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var runner = new HttpWorkflowRunner(new WorkflowContext(), _ => fake);
+        var runner = new WorkflowRunner(new WorkflowContext(), _ => fake);
         var result = await runner.PollAsync(new GetStatusRequest(), r => r.Status == "Completed");
 
         Assert.Equal("Completed", result.Status);
@@ -49,7 +49,7 @@ public class WorkflowContextPollTests
         fake.Enqueue(new StatusResponse("Pending"));
         fake.Enqueue(new StatusResponse("Completed"));
 
-        var runner = new HttpWorkflowRunner(new WorkflowContext(), _ => fake);
+        var runner = new WorkflowRunner(new WorkflowContext(), _ => fake);
         var result = await runner.PollAsync(
             new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
 
@@ -63,7 +63,7 @@ public class WorkflowContextPollTests
         var fake = new FakeTarget();
         for (var i = 0; i < 10; i++) fake.Enqueue(new StatusResponse("Pending"));
 
-        var runner = new HttpWorkflowRunner(new WorkflowContext(), _ => fake);
+        var runner = new WorkflowRunner(new WorkflowContext(), _ => fake);
         var ex = await Assert.ThrowsAsync<WorkflowContextException>(() =>
             runner.PollAsync(new GetStatusRequest(), r => r.Status == "Completed",
                 intervalMs: 10, timeoutMs: 50));
@@ -79,7 +79,7 @@ public class WorkflowContextPollTests
         fake.Enqueue(new StatusResponse("Completed"));
 
         var context = new WorkflowContext();
-        var runner  = new HttpWorkflowRunner(context, _ => fake);
+        var runner  = new WorkflowRunner(context, _ => fake);
         await runner.PollAsync(new GetStatusRequest(), r => r.Status == "Completed", intervalMs: 1);
 
         Assert.Equal("Completed", context.Get<StatusResponse>("getStatus").Status);
