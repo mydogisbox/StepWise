@@ -61,3 +61,70 @@ public record DigitalItem() : OrderLineItem
 {
     public IFieldValue<string> DownloadUrl { get; init; } = Static("https://example.com/ebook");
 }
+
+// Marker type used as AccumulationKey — lets PhysicalLineItem and DigitalLineItem
+// share a bucket despite resolving to different TResponse types.
+public abstract record LineItem() : BuildableRequest;
+
+public record PhysicalLineItemResponse(string ProductName, int Quantity, decimal UnitPrice, string ShippingAddress);
+public record DigitalLineItemResponse(string ProductName, int Quantity, decimal UnitPrice, string DownloadUrl);
+
+public record PhysicalLineItem() : BuildableRequest<PhysicalLineItemResponse>
+{
+    public override Type AccumulationKey => typeof(LineItem);
+    public IFieldValue<string>  ProductName     { get; init; } = Static("Widget");
+    public IFieldValue<int>     Quantity        { get; init; } = Static(1);
+    public IFieldValue<decimal> UnitPrice       { get; init; } = Static(9.99m);
+    public IFieldValue<string>  ShippingAddress { get; init; } = Static("123 Main St");
+}
+
+public record DigitalLineItem() : BuildableRequest<DigitalLineItemResponse>
+{
+    public override Type AccumulationKey => typeof(LineItem);
+    public IFieldValue<string>  ProductName { get; init; } = Static("E-Book");
+    public IFieldValue<int>     Quantity    { get; init; } = Static(1);
+    public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
+    public IFieldValue<string>  DownloadUrl { get; init; } = Static("https://example.com/ebook");
+}
+
+public record TypeMappedOrderRequest() : HttpWorkflowRequest<OrderResponse>("typeMappedOrder")
+{
+    public IFieldValue<string>       UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
+    public IFieldValue<List<object>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
+}
+
+// MapBody pattern-matches on the concrete response type to include type-specific fields.
+public class TypeMappedOrderStep : HttpStep<TypeMappedOrderRequest, OrderResponse>
+{
+    public override HttpMethod Method => HttpMethod.Post;
+    public override string     Path   => "/orders";
+
+    public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields)
+    {
+        var items  = (List<object?>)resolvedFields["Items"]!;
+        var mapped = items.Select<object?, object?>(item => item switch
+        {
+            PhysicalLineItemResponse p => new Dictionary<string, object?>
+            {
+                ["productName"]     = p.ProductName,
+                ["quantity"]        = p.Quantity,
+                ["unitPrice"]       = p.UnitPrice,
+                ["shippingAddress"] = p.ShippingAddress,
+            },
+            DigitalLineItemResponse d => new Dictionary<string, object?>
+            {
+                ["productName"] = d.ProductName,
+                ["quantity"]    = d.Quantity,
+                ["unitPrice"]   = d.UnitPrice,
+                ["downloadUrl"] = d.DownloadUrl,
+            },
+            _ => item
+        }).ToList();
+
+        return new()
+        {
+            ["UserId"] = resolvedFields["UserId"],
+            ["Items"]  = mapped,
+        };
+    }
+}

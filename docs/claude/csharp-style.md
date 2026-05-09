@@ -18,6 +18,14 @@ public IFieldValue<string> BaseUrl { get; init; } = Static("http://localhost:502
 
 `Generated` accepts any `Func<T>` — there is no built-in generator list in C#. That constraint only applies to the JSON `{ "generated": "guid" }` syntax.
 
+`HasCapture` checks whether a step has run before reading its response — useful in `From` lambdas where a prior step is optional:
+
+```csharp
+["Authorization"] = From(ctx => ctx.HasCapture("login")
+    ? $"Bearer {ctx.Get<LoginResponse>("login").Token}"
+    : "")
+```
+
 ---
 
 ## Field value rule

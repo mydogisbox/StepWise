@@ -235,6 +235,46 @@ public class MixedItemTypes_AccumulateUnderBaseType : WalkthroughTestBase
     }
 }
 
+// Demonstrates type-based mapping in MapBody: PhysicalLineItem and DigitalLineItem share an
+// AccumulationKey but resolve to distinct TResponse types (PhysicalLineItemResponse /
+// DigitalLineItemResponse). MapBody pattern-matches on the concrete type to include
+// type-specific fields (shippingAddress vs downloadUrl) in the request payload.
+public class MixedItemTypes_MappedByType
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    [Fact]
+    public async Task Test()
+    {
+        var authTarget = new HttpTarget(SampleApiUrl)
+            .Register(new LoginStep());
+
+        var apiTarget = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new TypeMappedOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+
+        var runner = new WorkflowRunner(
+            new WorkflowContext(),
+            stepName => stepName == "login" ? (ITarget)authTarget : apiTarget);
+
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
+
+        await runner.BuildAsync(new PhysicalLineItem() with { ProductName = Static("Physical Widget") });
+        await runner.BuildAsync(new DigitalLineItem()  with { ProductName = Static("Premium E-Book") });
+
+        var order = await runner.ExecuteAsync(new TypeMappedOrderRequest());
+
+        Assert.Equal(2,                 order.Items.Count);
+        Assert.Equal("Physical Widget", order.Items[0].ProductName);
+        Assert.Equal("Premium E-Book",  order.Items[1].ProductName);
+    }
+}
+
 // Demonstrates plugging a custom ITarget — a plain function wrapping an HttpClient call —
 // into the context alongside a regular HttpTarget for the remaining steps.
 public class Login_ViaCustomTarget_CanPlaceOrder
