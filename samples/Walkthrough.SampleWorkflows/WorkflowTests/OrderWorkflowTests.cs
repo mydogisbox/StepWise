@@ -210,6 +210,48 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
     }
 }
 
+// Demonstrates PollAsync: re-executes a step until a predicate passes or the timeout is reached.
+// PollAsync is called on the runner directly rather than through WalkthroughTestBase helpers.
+// In a real scenario the order status would change asynchronously (e.g. "pending" → "shipped");
+// this sample polls until "pending" so it resolves on the first attempt without needing the API
+// to model async state transitions.
+public class PlacedOrder_CanBePolled
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    [Fact]
+    public async Task Test()
+    {
+        var authTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var apiTarget  = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new CreateOrderStep())
+            .Register(new GetOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+
+        var runner = new WorkflowRunner(
+            new WorkflowContext(),
+            stepName => stepName == "login" ? (ITarget)authTarget : apiTarget);
+
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
+        await runner.BuildAsync(new AddOrderItem());
+        await runner.ExecuteAsync(new CreateOrderRequest());
+
+        var order = await runner.PollAsync(
+            new GetOrderRequest(),
+            r => r.Status == "pending",
+            intervalMs: 100,
+            timeoutMs: 5000);
+
+        Assert.Equal("pending", order.Status);
+        Assert.Single(order.Items);
+    }
+}
+
 // Demonstrates AccumulationKey: PhysicalItem and DigitalItem have genuinely different fields
 // (ShippingAddress vs DownloadUrl), so they use subtypes rather than static factory methods.
 // Both accumulate under OrderLineItem because AccumulationKey is overridden on the base.

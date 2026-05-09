@@ -170,6 +170,38 @@ public class PlacedOrder_CanBeRetrieved : WalkthroughTestBase
 
 ---
 
+## Polling
+
+`PollAsync` re-executes a step on an interval until a predicate passes or the timeout is reached. The final response is captured under the step name and returned:
+
+```csharp
+var order = await runner.PollAsync(
+    new GetOrderRequest(),
+    r => r.Status == "shipped",
+    intervalMs: 500,
+    timeoutMs: 10000);
+
+Assert.Equal("shipped", order.Status);
+```
+
+- `intervalMs` — delay between attempts (default: 500)
+- `timeoutMs` — max wait before throwing `WorkflowContextException` (default: 10000)
+- Only the final passing response is captured; intermediate attempts overwrite each other
+
+Use `PollAsync` directly on `WorkflowRunner`, not through the `WalkthroughTestBase` helpers:
+
+```csharp
+var runner = new WorkflowRunner(new WorkflowContext(), stepName => ...);
+await runner.ExecuteAsync(new LoginRequest());
+await runner.ExecuteAsync(new CreateOrderRequest());
+
+var order = await runner.PollAsync(
+    new GetOrderRequest(),
+    r => r.Status == "shipped");
+```
+
+---
+
 ## Custom targets and multi-target routing
 
 `WorkflowRunner` is target-agnostic — it routes each step to whatever `ITarget` the resolver returns, then captures the response. `HttpTarget` is one implementation; any class can implement `ITarget` to wrap an SDK, a raw `HttpClient` call, or an in-memory stub.
