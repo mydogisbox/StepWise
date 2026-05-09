@@ -210,6 +210,28 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
     }
 }
 
+// Demonstrates ExecuteRawAsync: sends the request without throwing on non-2xx responses.
+// Returns object — cast to the expected type for assertions. The response is captured in
+// the context under the step name, so subsequent From references still resolve normally.
+// Use this when the workflow must continue even if a step returns a non-2xx status code,
+// or when the assertion on success/failure happens outside the workflow function.
+public class CreateOrder_RawResultCanBeCast : WalkthroughTestBase
+{
+    [Fact]
+    public async Task Test()
+    {
+        await ExecuteAsync(new LoginRequest());
+        await ExecuteAsync(new CreateUserRequest());
+        await BuildAsync(new AddOrderItem());
+
+        var result = await ExecuteRawAsync(new CreateOrderRequest());
+        var order  = (OrderResponse)result;
+
+        Assert.Equal("pending", order.Status);
+        Assert.Single(order.Items);
+    }
+}
+
 // Demonstrates PollAsync: re-executes a step until a predicate passes or the timeout is reached.
 // PollAsync is called on the runner directly rather than through WalkthroughTestBase helpers.
 // In a real scenario the order status would change asynchronously (e.g. "pending" → "shipped");

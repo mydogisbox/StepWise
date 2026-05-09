@@ -52,6 +52,26 @@ public class WorkflowRunner
     }
 
     /// <summary>
+    /// Executes a request without throwing on failure, captures the result, and returns it as object.
+    /// The caller casts to the expected type. Requires the target to implement IRawTarget.
+    /// </summary>
+    public async Task<object> ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request)
+    {
+        if (_resolver is null)
+            throw new WorkflowContextException(
+                "No target resolver registered. Provide a target or resolver when constructing WorkflowRunner.");
+
+        var target = _resolver(request.StepName);
+        if (target is not IRawTarget rawTarget)
+            throw new WorkflowContextException(
+                $"Target for step '{request.StepName}' does not implement IRawTarget.");
+
+        var result = await rawTarget.ExecuteRawAsync(request, _context);
+        _context.CaptureRaw(request.StepName, result);
+        return result;
+    }
+
+    /// <summary>
     /// Repeatedly executes a request until <paramref name="until"/> returns true
     /// or <paramref name="timeoutMs"/> elapses, with <paramref name="intervalMs"/> between attempts.
     /// </summary>

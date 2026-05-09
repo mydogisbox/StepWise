@@ -202,6 +202,25 @@ var order = await runner.PollAsync(
 
 ---
 
+## Raw execution
+
+`ExecuteRawAsync` sends the request without throwing on non-2xx responses. It returns `object` — cast to the expected type at the call site. The response is captured under the step name as usual, so subsequent `From` references still resolve:
+
+```csharp
+await ExecuteAsync(new LoginRequest());
+await ExecuteAsync(new CreateUserRequest());
+await BuildAsync(new AddOrderItem());
+
+var result = await ExecuteRawAsync(new CreateOrderRequest());
+var order  = (OrderResponse)result;
+
+Assert.Equal("pending", order.Status);
+```
+
+Use `ExecuteRawAsync` when the workflow must continue regardless of the HTTP status code, or when you want to assert on success vs. failure outside the workflow function. The target must implement `IRawTarget` — `HttpTarget` does this automatically for all registered steps.
+
+---
+
 ## Custom targets and multi-target routing
 
 `WorkflowRunner` is target-agnostic — it routes each step to whatever `ITarget` the resolver returns, then captures the response. `HttpTarget` is one implementation; any class can implement `ITarget` to wrap an SDK, a raw `HttpClient` call, or an in-memory stub.

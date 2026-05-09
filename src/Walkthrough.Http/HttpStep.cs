@@ -10,6 +10,12 @@ internal interface IHttpStep<TResponse>
         HttpWorkflowRequest<TResponse> request,
         Dictionary<string, object?> targetHeaders,
         WorkflowContext context);
+
+    Task<object> RunRawAsync(
+        string baseUrl,
+        HttpWorkflowRequest<TResponse> request,
+        Dictionary<string, object?> targetHeaders,
+        WorkflowContext context);
 }
 
 /// <summary>
@@ -34,7 +40,9 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     /// </summary>
     public virtual Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields)
     {
-        var pathParamNames = GetPlaceholderNames();
+        var pathParamNames = PlaceholderRegex.Matches(Path)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return resolvedFields
             .Where(kv => !pathParamNames.Contains(kv.Key))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -62,11 +70,44 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
         return RunAsync(baseUrl, resolvedFields, targetHeaders, context);
     }
 
+    Task<object> IHttpStep<TResponse>.RunRawAsync(
+        string baseUrl,
+        HttpWorkflowRequest<TResponse> request,
+        Dictionary<string, object?> targetHeaders,
+        WorkflowContext context)
+    {
+        var resolvedFields = FieldValueResolver.Resolve(request, context);
+        return RunRawAsync(baseUrl, resolvedFields, targetHeaders, context);
+    }
+
     internal async Task<TResponse> RunAsync(
         string baseUrl,
         Dictionary<string, object?> resolvedFields,
         Dictionary<string, object?> targetHeaders,
         WorkflowContext context)
+    {
+        var (pathParams, query, headers, body) = PrepareRequest(resolvedFields, targetHeaders);
+        var json = await HttpExecutor.SendAsync(baseUrl, Method, Path, pathParams, query, body, headers);
+        return HttpExecutor.Deserialize<TResponse>(json);
+    }
+
+    internal async Task<object> RunRawAsync(
+        string baseUrl,
+        Dictionary<string, object?> resolvedFields,
+        Dictionary<string, object?> targetHeaders,
+        WorkflowContext context)
+    {
+        var (pathParams, query, headers, body) = PrepareRequest(resolvedFields, targetHeaders);
+        var (_, json) = await HttpExecutor.SendRawAsync(baseUrl, Method, Path, pathParams, query, body, headers);
+        return HttpExecutor.Deserialize<TResponse>(json)!;
+    }
+
+    private (Dictionary<string, object?> pathParams,
+             Dictionary<string, object?> query,
+             Dictionary<string, object?> headers,
+             Dictionary<string, object?> body) PrepareRequest(
+        Dictionary<string, object?> resolvedFields,
+        Dictionary<string, object?> targetHeaders)
     {
         // Auto-extract path params by matching {placeholder} names to resolved field names
         var pathParams = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
@@ -88,12 +129,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
             headers[kv.Key] = kv.Value;
 
         var body = MapBody(resolvedFields);
-        var json = await HttpExecutor.SendAsync(baseUrl, Method, Path, pathParams, query, body, headers);
-        return HttpExecutor.Deserialize<TResponse>(json);
+        return (pathParams, query, headers, body);
     }
 
-    private HashSet<string> GetPlaceholderNames()
-        => PlaceholderRegex.Matches(Path)
-            .Select(m => m.Groups[1].Value)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

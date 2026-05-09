@@ -38,6 +38,9 @@ public abstract class WalkthroughTestBase
     protected Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
         => _runner.ExecuteAsync(request);
 
+    protected Task<object> ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request)
+        => _runner.ExecuteRawAsync(request);
+
     protected Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)
         => _runner.BuildAsync(item);
 }

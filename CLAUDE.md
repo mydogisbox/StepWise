@@ -87,5 +87,7 @@ Only reach for lower-level testing if the above is genuinely insufficient.
 
 ---
 
-@docs/claude/csharp-style.md
-@docs/claude/json-style.md
+## Style guides
+
+- C#: `docs/claude/csharp-style.md`
+- JSON: `docs/claude/json-style.md`

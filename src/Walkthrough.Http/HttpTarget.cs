@@ -6,7 +6,7 @@ namespace Walkthrough.Http;
 /// An execution target that sends requests over HTTP.
 /// Register request types with their steps via Register() before use.
 /// </summary>
-public class HttpTarget : ITarget
+public class HttpTarget : ITarget, IRawTarget
 {
     private readonly string _baseUrl;
     private readonly IReadOnlyDictionary<string, IFieldValue<string>> _headers;
@@ -53,5 +53,20 @@ public class HttpTarget : ITarget
 
         var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
         return ((IHttpStep<TResponse>)step).RunAsync(_baseUrl, httpRequest, targetHeaders, context);
+    }
+
+    Task<object> IRawTarget.ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+    {
+        if (request is not HttpWorkflowRequest<TResponse> httpRequest)
+            throw new HttpStepException(
+                $"HttpTarget requires an HttpWorkflowRequest. Got '{request.GetType().Name}'.");
+
+        if (!_steps.TryGetValue(httpRequest.GetType(), out var step))
+            throw new HttpStepException(
+                $"No step registered for '{httpRequest.GetType().Name}'. " +
+                $"Call .Register(new YourStep()) on the HttpTarget.");
+
+        var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
+        return ((IHttpStep<TResponse>)step).RunRawAsync(_baseUrl, httpRequest, targetHeaders, context);
     }
 }
