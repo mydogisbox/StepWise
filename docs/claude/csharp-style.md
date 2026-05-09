@@ -204,20 +204,30 @@ var order = await runner.PollAsync(
 
 ## Raw execution
 
-`ExecuteRawAsync` sends the request without throwing on non-2xx responses. It returns `object` — cast to the expected type at the call site. The response is captured under the step name as usual, so subsequent `From` references still resolve:
+`ExecuteRawAsync` sends the request without throwing on non-2xx responses and returns `object`. The concrete type depends on the target — `HttpTarget` returns `HttpRawResult`, which carries `StatusCode` and `Body`. Cast accordingly at the call site:
 
 ```csharp
 await ExecuteAsync(new LoginRequest());
 await ExecuteAsync(new CreateUserRequest());
 await BuildAsync(new AddOrderItem());
 
-var result = await ExecuteRawAsync(new CreateOrderRequest());
-var order  = (OrderResponse)result;
+var raw   = (HttpRawResult)await ExecuteRawAsync(new CreateOrderRequest());
+var order = (OrderResponse)raw.Body!;
 
+Assert.Equal(201, raw.StatusCode);
 Assert.Equal("pending", order.Status);
 ```
 
-Use `ExecuteRawAsync` when the workflow must continue regardless of the HTTP status code, or when you want to assert on success vs. failure outside the workflow function. The target must implement `IRawTarget` — `HttpTarget` does this automatically for all registered steps.
+On non-2xx responses, `Body` is the deserialized `TResponse` when the body matches that shape — otherwise the raw JSON string:
+
+```csharp
+var raw = (HttpRawResult)await ExecuteRawAsync(
+    new CreateOrderRequest() with { UserId = Static("nonexistent-id") });
+
+Assert.Equal(400, raw.StatusCode);
+```
+
+`HttpTarget` implements `IRawTarget` automatically for all registered steps — no additional setup required. Custom targets that implement `IRawTarget` return whatever type makes sense for their transport.
 
 ---
 

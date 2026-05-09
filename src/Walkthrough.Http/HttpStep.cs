@@ -98,8 +98,11 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
         WorkflowContext context)
     {
         var (pathParams, query, headers, body) = PrepareRequest(resolvedFields, targetHeaders);
-        var (_, json) = await HttpExecutor.SendRawAsync(baseUrl, Method, Path, pathParams, query, body, headers);
-        return HttpExecutor.Deserialize<TResponse>(json)!;
+        var (statusCode, json) = await HttpExecutor.SendRawAsync(baseUrl, Method, Path, pathParams, query, body, headers);
+        object? responseBody;
+        try   { responseBody = string.IsNullOrEmpty(json) ? null : HttpExecutor.Deserialize<TResponse>(json); }
+        catch { responseBody = json; }
+        return new HttpRawResult(statusCode, responseBody);
     }
 
     private (Dictionary<string, object?> pathParams,

@@ -211,24 +211,34 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
 }
 
 // Demonstrates ExecuteRawAsync: sends the request without throwing on non-2xx responses.
-// Returns object — cast to the expected type for assertions. The response is captured in
-// the context under the step name, so subsequent From references still resolve normally.
-// Use this when the workflow must continue even if a step returns a non-2xx status code,
-// or when the assertion on success/failure happens outside the workflow function.
-public class CreateOrder_RawResultCanBeCast : WalkthroughTestBase
+// Returns HttpRawResult — cast Body to the expected type for assertions.
+// Use when the workflow must continue regardless of status code, or when the assertion
+// on success vs. failure happens outside the workflow function.
+public class CreateOrder_StatusCodeAvailableViaRawResult : WalkthroughTestBase
 {
     [Fact]
-    public async Task Test()
+    public async Task SuccessReturns201()
     {
         await ExecuteAsync(new LoginRequest());
         await ExecuteAsync(new CreateUserRequest());
         await BuildAsync(new AddOrderItem());
 
-        var result = await ExecuteRawAsync(new CreateOrderRequest());
-        var order  = (OrderResponse)result;
+        var raw   = (HttpRawResult)await ExecuteRawAsync(new CreateOrderRequest());
+        var order = (OrderResponse)raw.Body!;
 
+        Assert.Equal(201, raw.StatusCode);
         Assert.Equal("pending", order.Status);
-        Assert.Single(order.Items);
+    }
+
+    [Fact]
+    public async Task UnknownUserReturns400()
+    {
+        await ExecuteAsync(new LoginRequest());
+
+        var raw = (HttpRawResult)await ExecuteRawAsync(
+            new CreateOrderRequest() with { UserId = Static("nonexistent-id") });
+
+        Assert.Equal(400, raw.StatusCode);
     }
 }
 
