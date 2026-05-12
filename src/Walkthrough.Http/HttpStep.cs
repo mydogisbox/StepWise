@@ -8,13 +8,13 @@ internal interface IHttpStep<TResponse>
     Task<TResponse> RunAsync(
         string baseUrl,
         HttpWorkflowRequest<TResponse> request,
-        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, string> targetHeaders,
         WorkflowContext context);
 
     Task<object> RunRawAsync(
         string baseUrl,
         HttpWorkflowRequest<TResponse> request,
-        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, string> targetHeaders,
         WorkflowContext context);
 }
 
@@ -63,7 +63,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     Task<TResponse> IHttpStep<TResponse>.RunAsync(
         string baseUrl,
         HttpWorkflowRequest<TResponse> request,
-        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, string> targetHeaders,
         WorkflowContext context)
     {
         var resolvedFields = FieldValueResolver.Resolve(request, context);
@@ -73,7 +73,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     Task<object> IHttpStep<TResponse>.RunRawAsync(
         string baseUrl,
         HttpWorkflowRequest<TResponse> request,
-        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, string> targetHeaders,
         WorkflowContext context)
     {
         var resolvedFields = FieldValueResolver.Resolve(request, context);
@@ -83,7 +83,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     internal async Task<TResponse> RunAsync(
         string baseUrl,
         Dictionary<string, object?> resolvedFields,
-        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, string> targetHeaders,
         WorkflowContext context)
     {
         var (pathParams, query, headers, body) = PrepareRequest(resolvedFields, targetHeaders);
@@ -94,7 +94,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     internal async Task<object> RunRawAsync(
         string baseUrl,
         Dictionary<string, object?> resolvedFields,
-        Dictionary<string, object?> targetHeaders,
+        Dictionary<string, string> targetHeaders,
         WorkflowContext context)
     {
         var (pathParams, query, headers, body) = PrepareRequest(resolvedFields, targetHeaders);
@@ -107,10 +107,10 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
 
     private (Dictionary<string, object?> pathParams,
              Dictionary<string, object?> query,
-             Dictionary<string, object?> headers,
+             Dictionary<string, string> headers,
              Dictionary<string, object?> body) PrepareRequest(
         Dictionary<string, object?> resolvedFields,
-        Dictionary<string, object?> targetHeaders)
+        Dictionary<string, string> targetHeaders)
     {
         // Auto-extract path params by matching {placeholder} names to resolved field names
         var pathParams = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
@@ -127,7 +127,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
             .ToDictionary(kv => kv.Key, kv => (object?)kv.Value);
 
         // Merge: target headers first, then step headers (step wins for matching keys)
-        var headers = new Dictionary<string, object?>(targetHeaders, StringComparer.OrdinalIgnoreCase);
+        var headers = new Dictionary<string, string>(targetHeaders, StringComparer.OrdinalIgnoreCase);
         foreach (var kv in MapHeaders(resolvedFields))
             headers[kv.Key] = kv.Value;
 

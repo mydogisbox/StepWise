@@ -223,9 +223,11 @@ public class JsonWorkflowRunner
 
         var pathParams  = ResolveFieldGroup(targetStep.PathParams, invocation.PathParams, captures);
         var queryParams = ResolveFieldGroup(targetStep.Query,       invocation.Query,      captures);
-        var headers     = ResolveFieldGroup(targetDef.Headers,      null,                  captures);
+        var rawHeaders  = ResolveFieldGroup(targetDef.Headers,      null,                  captures);
         foreach (var kv in ResolveFieldGroup(targetStep.Headers, invocation.Headers, captures))
-            headers[kv.Key] = kv.Value;
+            rawHeaders[kv.Key] = kv.Value;
+        var headers = rawHeaders.ToDictionary(
+            kv => kv.Key, kv => kv.Value?.ToString() ?? "", StringComparer.OrdinalIgnoreCase);
         var bodyFields  = MergeAndResolve(contract?.Defaults, invocation.With, captures);
         var baseUrl = targetDef.BaseUrl;
         var method = new HttpMethod(targetStep.Method.ToUpper());

@@ -29,7 +29,7 @@ public static class HttpExecutor
         Dictionary<string, object?> pathParams,
         Dictionary<string, object?> queryParams,
         Dictionary<string, object?> bodyFields,
-        Dictionary<string, object?> headers)
+        Dictionary<string, string> headers)
     {
         foreach (var (key, value) in pathParams)
             path = path.Replace($"{{{key}}}", Uri.EscapeDataString(value?.ToString() ?? ""),
@@ -52,7 +52,7 @@ public static class HttpExecutor
         }
 
         foreach (var (key, value) in headers)
-            httpRequest.Headers.TryAddWithoutValidation(key, value?.ToString() ?? "");
+            httpRequest.Headers.TryAddWithoutValidation(key, value);
 
         return await SharedClient.SendAsync(httpRequest);
     }
@@ -74,7 +74,7 @@ public static class HttpExecutor
         Dictionary<string, object?> pathParams,
         Dictionary<string, object?> queryParams,
         Dictionary<string, object?> bodyFields,
-        Dictionary<string, object?> headers)
+        Dictionary<string, string> headers)
     {
         var response = await SendCoreAsync(baseUrl, method, path, pathParams, queryParams, bodyFields, headers);
 
@@ -104,7 +104,7 @@ public static class HttpExecutor
         Dictionary<string, object?> pathParams,
         Dictionary<string, object?> queryParams,
         Dictionary<string, object?> bodyFields,
-        Dictionary<string, object?> headers)
+        Dictionary<string, string> headers)
     {
         var response = await SendCoreAsync(baseUrl, method, path, pathParams, queryParams, bodyFields, headers);
         var body = await response.Content.ReadAsStringAsync();
@@ -114,7 +114,4 @@ public static class HttpExecutor
     public static T Deserialize<T>(string json) =>
         JsonSerializer.Deserialize<T>(json, JsonOptions)
             ?? throw new HttpStepException($"Response deserialized to null for type '{typeof(T).Name}'.");
-
-    public static object? DeserializeRaw(string json, Type type) =>
-        JsonSerializer.Deserialize(json, type, JsonOptions);
 }

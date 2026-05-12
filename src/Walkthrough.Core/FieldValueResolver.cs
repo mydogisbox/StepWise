@@ -26,10 +26,10 @@ public static class FieldValueResolver
             t => t == typeof(WorkflowRequest<TResponse>));
 
     /// <summary>Resolves a flat dictionary of named string field values into plain values.</summary>
-    public static Dictionary<string, object?> ResolveGroup(
+    public static Dictionary<string, string> ResolveGroup(
         IReadOnlyDictionary<string, IFieldValue<string>> fields,
         WorkflowContext context)
-        => fields.ToDictionary(kv => kv.Key, kv => (object?)kv.Value.Resolve(context));
+        => fields.ToDictionary(kv => kv.Key, kv => kv.Value.Resolve(context));
 
     /// <summary>
     /// Resolves all IFieldValue&lt;T&gt; properties on a BuildableRequest.
