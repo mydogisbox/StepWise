@@ -248,7 +248,7 @@ public class JsonWorkflowRunner
                     ? doc.RootElement.EnumerateArray()
                         .Select(e => JsonValueResolver.JsonElementToObject(e))
                         .ToList<object?>()
-                    : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(rawBody, HttpExecutor.JsonOptions);
+                    : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(rawBody, HttpExecutor.DeserializeOptions);
             }
             catch
             {
@@ -273,7 +273,7 @@ public class JsonWorkflowRunner
             ? doc2.RootElement.EnumerateArray()
                 .Select(e => JsonValueResolver.JsonElementToObject(e))
                 .ToList<object?>()
-            : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson, HttpExecutor.JsonOptions);
+            : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson, HttpExecutor.DeserializeOptions);
 
         var captureName = invocation.CaptureAs ?? stepName;
         captures[captureName] = captured;

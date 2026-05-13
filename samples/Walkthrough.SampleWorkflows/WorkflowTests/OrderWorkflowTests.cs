@@ -493,7 +493,7 @@ public class SameWorkflow_DifferentTargetImplementations
         {
             var fields  = FieldValueResolver.Resolve(request, context);
             var content = new StringContent(
-                JsonSerializer.Serialize(fields, HttpExecutor.JsonOptions), Encoding.UTF8, "application/json");
+                JsonSerializer.Serialize(fields, HttpExecutor.SerializeOptions), Encoding.UTF8, "application/json");
             var response = await _http.PostAsync($"{baseUrl}/auth/login", content);
             response.EnsureSuccessStatusCode();
             return HttpExecutor.Deserialize<TResponse>(await response.Content.ReadAsStringAsync());

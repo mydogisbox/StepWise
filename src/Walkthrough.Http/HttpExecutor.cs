@@ -11,12 +11,14 @@ namespace Walkthrough.Http;
 /// </summary>
 public static class HttpExecutor
 {
-    public static readonly JsonSerializerOptions JsonOptions = new()
+    public static readonly JsonSerializerOptions SerializeOptions = new()
     {
-        PropertyNamingPolicy         = JsonNamingPolicy.CamelCase,
-        DictionaryKeyPolicy          = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive  = true,
-        DefaultIgnoreCondition       = JsonIgnoreCondition.WhenWritingNull,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    public static readonly JsonSerializerOptions DeserializeOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
     };
 
     private static readonly HttpClient SharedClient =
@@ -47,7 +49,7 @@ public static class HttpExecutor
 
         if (method != HttpMethod.Get && method != HttpMethod.Delete && bodyFields.Count > 0)
         {
-            var json = JsonSerializer.Serialize(bodyFields, JsonOptions);
+            var json = JsonSerializer.Serialize(bodyFields, SerializeOptions);
             httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
         }
 
@@ -112,6 +114,6 @@ public static class HttpExecutor
     }
 
     public static T Deserialize<T>(string json) =>
-        JsonSerializer.Deserialize<T>(json, JsonOptions)
+        JsonSerializer.Deserialize<T>(json, DeserializeOptions)
             ?? throw new HttpStepException($"Response deserialized to null for type '{typeof(T).Name}'.");
 }
