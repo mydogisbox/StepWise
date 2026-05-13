@@ -221,8 +221,10 @@ public class JsonWorkflowRunner
 
         var targetStep = targetDef.Steps![stepName];
 
-        var pathParams  = ResolveFieldGroup(targetStep.PathParams, invocation.PathParams, captures);
-        var queryParams = ResolveFieldGroup(targetStep.Query,       invocation.Query,      captures);
+        var pathParams    = ResolveFieldGroup(targetStep.PathParams, invocation.PathParams, captures);
+        var rawQuery      = ResolveFieldGroup(targetStep.Query,       invocation.Query,      captures);
+        var queryParams   = rawQuery.ToDictionary(
+            kv => kv.Key, kv => kv.Value?.ToString() ?? "", StringComparer.OrdinalIgnoreCase);
         var rawHeaders  = ResolveFieldGroup(targetDef.Headers,      null,                  captures);
         foreach (var kv in ResolveFieldGroup(targetStep.Headers, invocation.Headers, captures))
             rawHeaders[kv.Key] = kv.Value;

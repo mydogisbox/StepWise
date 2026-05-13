@@ -106,7 +106,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
     }
 
     private (Dictionary<string, object?> pathParams,
-             Dictionary<string, object?> query,
+             Dictionary<string, string> query,
              Dictionary<string, string> headers,
              Dictionary<string, object?> body) PrepareRequest(
         Dictionary<string, object?> resolvedFields,
@@ -123,8 +123,7 @@ public abstract class HttpStep<TRequest, TResponse> : IHttpStep<TResponse>
                 pathParams[name] = resolvedFields[field];
         }
 
-        var query = MapQuery(resolvedFields)
-            .ToDictionary(kv => kv.Key, kv => (object?)kv.Value);
+        var query = MapQuery(resolvedFields);
 
         // Merge: target headers first, then step headers (step wins for matching keys)
         var headers = new Dictionary<string, string>(targetHeaders, StringComparer.OrdinalIgnoreCase);

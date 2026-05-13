@@ -29,7 +29,7 @@ public static class HttpExecutor
         HttpMethod method,
         string path,
         Dictionary<string, object?> pathParams,
-        Dictionary<string, object?> queryParams,
+        Dictionary<string, string> queryParams,
         Dictionary<string, object?> bodyFields,
         Dictionary<string, string> headers)
     {
@@ -40,7 +40,7 @@ public static class HttpExecutor
         if (queryParams.Count > 0)
         {
             var qs = string.Join("&", queryParams.Select(kv =>
-                $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value?.ToString() ?? "")}"));
+                $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
             path = path.TrimEnd('?', '&') + (path.Contains('?') ? "&" : "?") + qs;
         }
 
@@ -74,7 +74,7 @@ public static class HttpExecutor
         HttpMethod method,
         string path,
         Dictionary<string, object?> pathParams,
-        Dictionary<string, object?> queryParams,
+        Dictionary<string, string> queryParams,
         Dictionary<string, object?> bodyFields,
         Dictionary<string, string> headers)
     {
@@ -104,7 +104,7 @@ public static class HttpExecutor
         HttpMethod method,
         string path,
         Dictionary<string, object?> pathParams,
-        Dictionary<string, object?> queryParams,
+        Dictionary<string, string> queryParams,
         Dictionary<string, object?> bodyFields,
         Dictionary<string, string> headers)
     {
