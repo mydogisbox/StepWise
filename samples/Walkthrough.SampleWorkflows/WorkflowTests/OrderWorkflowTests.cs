@@ -360,6 +360,8 @@ public class Login_ViaCustomTarget_CanPlaceOrder
         private static readonly HttpClient _http = new();
         private static readonly JsonSerializerOptions _readOptions = new() { PropertyNameCaseInsensitive = true };
 
+        public bool CanHandle(Type _) => true;
+
         public async Task<TResponse> ExecuteAsync<TResponse>(
             WorkflowRequest<TResponse> request, WorkflowContext context)
         {
@@ -416,6 +418,8 @@ public class ThreeTargets_HttpAndDirectMixed
         private static readonly JsonSerializerOptions _readOptions =
             new() { PropertyNameCaseInsensitive = true };
 
+        public bool CanHandle(Type _) => true;
+
         public async Task<TResponse> ExecuteAsync<TResponse>(
             WorkflowRequest<TResponse> request, WorkflowContext context)
         {
@@ -466,6 +470,39 @@ public class ThreeTargets_HttpAndDirectMixed
     }
 }
 
+// Demonstrates multi-target routing: each HttpTarget handles only the request types
+// it has registered steps for. loginTarget owns LoginRequest; apiTarget owns everything
+// else. No step-name strings required — routing is driven by request type.
+public class MultiTarget_EachTargetHandlesItsOwnSteps
+{
+    private const string SampleApiUrl = "http://localhost:4200";
+
+    [Fact]
+    public async Task Test()
+    {
+        var loginTarget = new HttpTarget(SampleApiUrl)
+            .Register(new LoginStep());
+
+        var apiTarget = new HttpTarget(SampleApiUrl)
+            .Register(new CreateUserStep())
+            .Register(new CreateOrderStep())
+            .WithHeaders(new Dictionary<string, IFieldValue<string>>
+            {
+                ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
+            });
+
+        var runner = new WorkflowRunner(new WorkflowContext(), loginTarget, apiTarget);
+
+        await runner.ExecuteAsync(new LoginRequest());
+        await runner.ExecuteAsync(new CreateUserRequest());
+        await runner.BuildAsync(new AddOrderItem());
+        var order = await runner.ExecuteAsync(new CreateOrderRequest());
+
+        Assert.Equal("pending", order.Status);
+        Assert.Single(order.Items);
+    }
+}
+
 // Demonstrates that a workflow function is target-agnostic.
 // PlaceOrder takes only a resolver — the runner is constructed inside.
 // The same function runs unchanged against two different target configurations:
@@ -487,6 +524,8 @@ public class SameWorkflow_DifferentTargetImplementations
     private class DirectLoginTarget(string baseUrl) : ITarget
     {
         private static readonly HttpClient _http = new();
+
+        public bool CanHandle(Type _) => true;
 
         public async Task<TResponse> ExecuteAsync<TResponse>(
             WorkflowRequest<TResponse> request, WorkflowContext context)

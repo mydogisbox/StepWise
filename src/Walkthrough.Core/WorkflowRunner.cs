@@ -10,15 +10,16 @@ public class WorkflowRunner
 {
     private readonly WorkflowContext _context;
     private readonly Func<string, ITarget>? _resolver;
+    private readonly ITarget[]? _targets;
 
     private static readonly JsonSerializerOptions _jsonOptions =
         new() { PropertyNameCaseInsensitive = true };
 
-    /// <summary>Routes all steps to a single target.</summary>
-    public WorkflowRunner(WorkflowContext context, ITarget target)
+    /// <summary>Routes each request to the first target whose CanHandle returns true.</summary>
+    public WorkflowRunner(WorkflowContext context, params ITarget[] targets)
     {
-        _context  = context;
-        _resolver = _ => target;
+        _context = context;
+        _targets = targets;
     }
 
     /// <summary>Routes each step to the target returned by the resolver.</summary>
@@ -31,8 +32,7 @@ public class WorkflowRunner
     /// <summary>Build-only runner — ExecuteAsync will throw if called.</summary>
     public WorkflowRunner(WorkflowContext context)
     {
-        _context  = context;
-        _resolver = null;
+        _context = context;
     }
 
     /// <summary>
@@ -40,13 +40,8 @@ public class WorkflowRunner
     /// </summary>
     public async Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
     {
-        if (_resolver is null)
-            throw new WorkflowContextException(
-                "No target resolver registered. Provide a target or resolver when constructing WorkflowRunner.");
-
-        var target   = _resolver(request.StepName);
+        var target   = Resolve(request);
         var response = await target.ExecuteAsync(request, _context);
-
         _context.CaptureRaw(request.StepName, response!);
         return response;
     }
@@ -57,11 +52,7 @@ public class WorkflowRunner
     /// </summary>
     public async Task<object> ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request)
     {
-        if (_resolver is null)
-            throw new WorkflowContextException(
-                "No target resolver registered. Provide a target or resolver when constructing WorkflowRunner.");
-
-        var target = _resolver(request.StepName);
+        var target = Resolve(request);
         if (target is not IRawTarget rawTarget)
             throw new WorkflowContextException(
                 $"Target for step '{request.StepName}' does not implement IRawTarget.");
@@ -69,6 +60,20 @@ public class WorkflowRunner
         var result = await rawTarget.ExecuteRawAsync(request, _context);
         _context.CaptureRaw(request.StepName, result);
         return result;
+    }
+
+    private ITarget Resolve<TResponse>(WorkflowRequest<TResponse> request)
+    {
+        if (_targets is not null)
+            return Array.Find(_targets, t => t.CanHandle(request.GetType()))
+                ?? throw new WorkflowContextException(
+                    $"No target can handle '{request.GetType().Name}'.");
+
+        if (_resolver is not null)
+            return _resolver(request.StepName);
+
+        throw new WorkflowContextException(
+            "No target resolver registered. Provide targets or a resolver when constructing WorkflowRunner.");
     }
 
     /// <summary>

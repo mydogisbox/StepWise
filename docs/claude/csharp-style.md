@@ -237,10 +237,10 @@ Assert.Equal(400, raw.StatusCode);
 
 All captures are shared through the same `WorkflowContext` regardless of which target produced them. A `From` lambda can read captures from any prior step, even one that ran against a different target.
 
-The standard pattern for auth headers is two `HttpTarget` instances — login on a plain target, everything else on a target with `WithHeaders`:
+`WorkflowRunner` accepts multiple targets directly. Each request is routed to the first target whose `CanHandle` returns true. `HttpTarget.CanHandle` returns true only for request types it has a registered step for, so targets act as precise overrides with the last target serving as the catch-all:
 
 ```csharp
-var authTarget = new HttpTarget(SampleApiUrl)
+var loginTarget = new HttpTarget(SampleApiUrl)
     .Register(new LoginStep());
 
 var apiTarget = new HttpTarget(SampleApiUrl)
@@ -251,16 +251,21 @@ var apiTarget = new HttpTarget(SampleApiUrl)
         ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
     });
 
-var runner = new WorkflowRunner(new WorkflowContext(), stepName =>
-    stepName == "login" ? (ITarget)authTarget : apiTarget);
+var runner = new WorkflowRunner(new WorkflowContext(), loginTarget, apiTarget);
 ```
 
-Custom `ITarget` implementations can be mixed into the same resolver:
+`LoginRequest` is handled by `loginTarget`; everything else falls through to `apiTarget`.
+
+### Custom ITarget
+
+Any class can implement `ITarget`. `CanHandle` controls routing — return true for all types a catch-all handles, or check specific types for a targeted override:
 
 ```csharp
 private class DirectGetOrderTarget(string baseUrl) : ITarget
 {
     private static readonly HttpClient _http = new();
+
+    public bool CanHandle(Type requestType) => requestType == typeof(GetOrderRequest);
 
     public async Task<TResponse> ExecuteAsync<TResponse>(
         WorkflowRequest<TResponse> request, WorkflowContext context)
@@ -279,15 +284,11 @@ private class DirectGetOrderTarget(string baseUrl) : ITarget
     }
 }
 
-var runner = new WorkflowRunner(new WorkflowContext(), stepName => stepName switch
-{
-    "login"    => (ITarget)authTarget,
-    "getOrder" => new DirectGetOrderTarget(SampleApiUrl),
-    _          => apiTarget
-});
+var runner = new WorkflowRunner(new WorkflowContext(),
+    new DirectGetOrderTarget(SampleApiUrl), authTarget, apiTarget);
 ```
 
-This is also the mechanism for swapping implementations — route a step to an SDK wrapper or a stub by changing the resolver.
+For cases where type-based routing isn't enough, `WorkflowRunner` also accepts a `Func<string, ITarget>` resolver that maps step names directly.
 
 ---
 

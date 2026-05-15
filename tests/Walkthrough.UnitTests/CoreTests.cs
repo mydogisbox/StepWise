@@ -37,6 +37,7 @@ public class WorkflowContextTests
     private record FakeRequest() : WorkflowRequest<FakeResponse>("login");
     private class FakeTarget : ITarget
     {
+        public bool CanHandle(Type _) => true;
         public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
             => Task.FromResult((TResponse)(object)new FakeResponse());
     }
@@ -476,6 +477,7 @@ public class MultiTargetWorkflowTests
     private class CountingFakeTarget<TResponse>(TResponse response) : ITarget
     {
         public int CallCount { get; private set; }
+        public bool CanHandle(Type _) => true;
         public Task<T> ExecuteAsync<T>(WorkflowRequest<T> request, WorkflowContext context)
         {
             CallCount++;

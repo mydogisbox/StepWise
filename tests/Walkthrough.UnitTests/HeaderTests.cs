@@ -293,6 +293,7 @@ public class HttpTargetHeaderTests : IDisposable
     private record FakeLoginRequest() : WorkflowRequest<FakeTokenResponse>("login");
     private class FakeLoginTarget(FakeTokenResponse response) : ITarget
     {
+        public bool CanHandle(Type _) => true;
         public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
             => Task.FromResult((TResponse)(object)response);
     }

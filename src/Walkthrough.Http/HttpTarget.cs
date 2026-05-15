@@ -40,6 +40,8 @@ public class HttpTarget : ITarget, IRawTarget
         return new(_baseUrl, _headers, newSteps);
     }
 
+    bool ITarget.CanHandle(Type requestType) => _steps.ContainsKey(requestType);
+
     Task<TResponse> ITarget.ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
     {
         if (request is not HttpWorkflowRequest<TResponse> httpRequest)

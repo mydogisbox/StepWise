@@ -31,8 +31,7 @@ public abstract class WalkthroughTestBase
                     : "")
             });
 
-        _runner = new WorkflowRunner(context,
-            stepName => stepName == "login" ? (ITarget)loginTarget : apiTarget);
+        _runner = new WorkflowRunner(context, loginTarget, apiTarget);
     }
 
     protected Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)

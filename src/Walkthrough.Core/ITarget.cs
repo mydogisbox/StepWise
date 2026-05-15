@@ -8,4 +8,9 @@ namespace Walkthrough.Core;
 public interface ITarget
 {
     Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context);
+
+    /// <summary>
+    /// Returns true if this target can handle requests of the given type.
+    /// </summary>
+    bool CanHandle(Type requestType);
 }

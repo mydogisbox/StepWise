@@ -19,6 +19,7 @@ public class WorkflowContextPollTests
         private readonly Queue<object> _responses = new();
         public int CallCount { get; private set; }
 
+        public bool CanHandle(Type _) => true;
         public void Enqueue<T>(T response) => _responses.Enqueue(response!);
 
         public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)

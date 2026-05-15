@@ -7,4 +7,27 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Content Include="build\Walkthrough.Core.targets">
+      <Pack>true</Pack>
+      <PackagePath>build/Walkthrough.Core.targets</PackagePath>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\CLAUDE.md">
+      <Pack>true</Pack>
+      <PackagePath>build/claude/CLAUDE.md</PackagePath>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\docs\claude\csharp-style.md">
+      <Pack>true</Pack>
+      <PackagePath>build/claude/csharp-style.md</PackagePath>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\docs\claude\json-style.md">
+      <Pack>true</Pack>
+      <PackagePath>build/claude/json-style.md</PackagePath>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

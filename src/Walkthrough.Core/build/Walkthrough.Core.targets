@@ -1,0 +1,16 @@
+<Project>
+  <Target Name="CopyWalkthroughClaudeDocs" BeforeTargets="Build"
+          Condition="!Exists('$(MSBuildProjectDirectory)/.claude/walkthrough/CLAUDE.md')">
+    <PropertyGroup>
+      <_WalkthroughDocsSrc>$(MSBuildThisFileDirectory)claude/</_WalkthroughDocsSrc>
+      <_WalkthroughDocsDest>$(MSBuildProjectDirectory)/.claude/walkthrough/</_WalkthroughDocsDest>
+    </PropertyGroup>
+    <MakeDir Directories="$(_WalkthroughDocsDest)" />
+    <ItemGroup>
+      <_WalkthroughDocFiles Include="$(_WalkthroughDocsSrc)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_WalkthroughDocFiles)"
+          DestinationFolder="$(_WalkthroughDocsDest)%(RecursiveDir)" />
+    <Message Text="Walkthrough: Claude docs written to .claude/walkthrough/ — add @import entries to your CLAUDE.md to enable them." Importance="high" />
+  </Target>
+</Project>
