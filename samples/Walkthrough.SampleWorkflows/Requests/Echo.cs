@@ -1,22 +1,28 @@
+using Walkthrough.Core;
 using Walkthrough.Http;
-using static Walkthrough.Core.FieldValues;
 
 namespace Walkthrough.SampleWorkflows;
 
-public record EchoHeadersRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeaders");
-
-public class EchoHeadersStep : HttpStep<EchoHeadersRequest, Dictionary<string, string>>
+public record EchoHeadersRequest() : WorkflowRequest<Dictionary<string, string>, EchoHeadersRequest>, IWorkflowRequest
 {
-    public override HttpMethod Method => HttpMethod.Get;
-    public override string     Path   => "/echo/headers";
+    public static string StepName => "echoHeaders";
 }
 
-public record EchoHeadersWithStepHeaderRequest() : HttpWorkflowRequest<Dictionary<string, string>>("echoHeadersWithStepHeader");
-
-public class EchoHeadersWithStepHeaderStep : HttpStep<EchoHeadersWithStepHeaderRequest, Dictionary<string, string>>
+public class EchoHeadersStep : HttpStep<EchoHeadersRequest, Dictionary<string, string>, EchoHeadersStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Get;
-    public override string     Path   => "/echo/headers";
+    public static HttpMethod Method => HttpMethod.Get;
+    public static string     Path   => "/echo/headers";
+}
+
+public record EchoHeadersWithStepHeaderRequest() : WorkflowRequest<Dictionary<string, string>, EchoHeadersWithStepHeaderRequest>, IWorkflowRequest
+{
+    public static string StepName => "echoHeadersWithStepHeader";
+}
+
+public class EchoHeadersWithStepHeaderStep : HttpStep<EchoHeadersWithStepHeaderRequest, Dictionary<string, string>, EchoHeadersWithStepHeaderStep>, IHttpStep
+{
+    public static HttpMethod Method => HttpMethod.Get;
+    public static string     Path   => "/echo/headers";
 
     public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
         => new() { ["x-step-header"] = "from-step" };

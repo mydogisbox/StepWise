@@ -145,51 +145,62 @@ public class HttpTargetHeaderTests : IDisposable
 
     private record FakeResponse(string Id);
 
-    private record WithHeadersRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
-    private class WithHeadersStep : HttpStep<WithHeadersRequest, FakeResponse>
+    private record WithHeadersRequest() : WorkflowRequest<FakeResponse, WithHeadersRequest>, IWorkflowRequest
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/thing";
+        public static string StepName => "doThing";
+    }
+    private class WithHeadersStep : HttpStep<WithHeadersRequest, FakeResponse, WithHeadersStep>, IHttpStep
+    {
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string Path => "/thing";
     }
 
-    private record StepLevelHeaderRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
-    private class StepLevelHeaderStep : HttpStep<StepLevelHeaderRequest, FakeResponse>
+    private record StepLevelHeaderRequest() : WorkflowRequest<FakeResponse, StepLevelHeaderRequest>, IWorkflowRequest
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/thing";
+        public static string StepName => "doThing";
+    }
+    private class StepLevelHeaderStep : HttpStep<StepLevelHeaderRequest, FakeResponse, StepLevelHeaderStep>, IHttpStep
+    {
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string Path => "/thing";
         public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
             => new() { ["X-Api-Version"] = "2" };
     }
 
-    private record PerRequestHeaderRequest() : HttpWorkflowRequest<FakeResponse>("doThing")
+    private record PerRequestHeaderRequest() : WorkflowRequest<FakeResponse, PerRequestHeaderRequest>, IWorkflowRequest
     {
+        public static string StepName => "doThing";
         public IFieldValue<string> XRequestId { get; init; } = Static("default");
     }
-    private class PerRequestHeaderStep : HttpStep<PerRequestHeaderRequest, FakeResponse>
+    private class PerRequestHeaderStep : HttpStep<PerRequestHeaderRequest, FakeResponse, PerRequestHeaderStep>, IHttpStep
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/thing";
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string Path => "/thing";
         public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
             => new() { ["X-Request-Id"] = resolvedFields["XRequestId"]?.ToString() ?? "" };
     }
 
-    private record StepVsTargetRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
-    private class StepVsTargetStep : HttpStep<StepVsTargetRequest, FakeResponse>
+    private record StepVsTargetRequest() : WorkflowRequest<FakeResponse, StepVsTargetRequest>, IWorkflowRequest
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/thing";
+        public static string StepName => "doThing";
+    }
+    private class StepVsTargetStep : HttpStep<StepVsTargetRequest, FakeResponse, StepVsTargetStep>, IHttpStep
+    {
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string Path => "/thing";
         public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
             => new() { ["X-Level"] = "step" };
     }
 
-    private record RequestFieldDrivesHeaderRequest() : HttpWorkflowRequest<FakeResponse>("doThing")
+    private record RequestFieldDrivesHeaderRequest() : WorkflowRequest<FakeResponse, RequestFieldDrivesHeaderRequest>, IWorkflowRequest
     {
+        public static string StepName => "doThing";
         public IFieldValue<string> Level { get; init; } = Static("step-default");
     }
-    private class RequestFieldDrivesHeaderStep : HttpStep<RequestFieldDrivesHeaderRequest, FakeResponse>
+    private class RequestFieldDrivesHeaderStep : HttpStep<RequestFieldDrivesHeaderRequest, FakeResponse, RequestFieldDrivesHeaderStep>, IHttpStep
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/thing";
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string Path => "/thing";
         public override Dictionary<string, string> MapHeaders(Dictionary<string, object?> resolvedFields)
             => new() { ["X-Level"] = resolvedFields["Level"]?.ToString() ?? "" };
     }
@@ -235,7 +246,7 @@ public class HttpTargetHeaderTests : IDisposable
     public async Task WithHeaders_SentWithRequest()
     {
         var target = Target()
-            .Register(new WithHeadersStep())
+            .Register<WithHeadersStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>> { ["X-Tenant-Id"] = Static("acme") });
         await Runner(target).ExecuteAsync(new WithHeadersRequest());
 
@@ -245,7 +256,7 @@ public class HttpTargetHeaderTests : IDisposable
     [Fact]
     public async Task StepHeaders_SentWithRequest()
     {
-        await Runner(Target().Register(new StepLevelHeaderStep()))
+        await Runner(Target().Register<StepLevelHeaderStep>())
             .ExecuteAsync(new StepLevelHeaderRequest());
 
         Assert.Equal("2", _receivedHeaders[0]["X-Api-Version"]);
@@ -254,7 +265,7 @@ public class HttpTargetHeaderTests : IDisposable
     [Fact]
     public async Task RequestFieldDrivesHeader_SentWithRequest()
     {
-        await Runner(Target().Register(new PerRequestHeaderStep()))
+        await Runner(Target().Register<PerRequestHeaderStep>())
             .ExecuteAsync(new PerRequestHeaderRequest() with { XRequestId = Static("req-123") });
 
         Assert.Equal("req-123", _receivedHeaders[0]["X-Request-Id"]);
@@ -264,7 +275,7 @@ public class HttpTargetHeaderTests : IDisposable
     public async Task StepWinsOverTarget_ForSameKey()
     {
         var target = Target()
-            .Register(new StepVsTargetStep())
+            .Register<StepVsTargetStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>> { ["X-Level"] = Static("target") });
         await Runner(target).ExecuteAsync(new StepVsTargetRequest());
 
@@ -274,7 +285,7 @@ public class HttpTargetHeaderTests : IDisposable
     [Fact]
     public async Task RequestFieldOverride_ChangesHeaderValue()
     {
-        await Runner(Target().Register(new RequestFieldDrivesHeaderStep()))
+        await Runner(Target().Register<RequestFieldDrivesHeaderStep>())
             .ExecuteAsync(new RequestFieldDrivesHeaderRequest() with { Level = Static("overridden") });
 
         Assert.Equal("overridden", _receivedHeaders[0]["X-Level"]);
@@ -283,18 +294,24 @@ public class HttpTargetHeaderTests : IDisposable
     // Auth expressed as a target-level header using From.
     // Uses a separate in-memory target for login so only one HTTP request hits the listener.
     private record FakeTokenResponse(string Token);
-    private record FromAuthRequest() : HttpWorkflowRequest<FakeResponse>("doThing");
-    private class FromAuthStep : HttpStep<FromAuthRequest, FakeResponse>
+    private record FromAuthRequest() : WorkflowRequest<FakeResponse, FromAuthRequest>, IWorkflowRequest
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string Path => "/thing";
+        public static string StepName => "doThing";
+    }
+    private class FromAuthStep : HttpStep<FromAuthRequest, FakeResponse, FromAuthStep>, IHttpStep
+    {
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string Path => "/thing";
     }
 
-    private record FakeLoginRequest() : WorkflowRequest<FakeTokenResponse>("login");
+    private record FakeLoginRequest() : WorkflowRequest<FakeTokenResponse, FakeLoginRequest>, IWorkflowRequest
+    {
+        public static string StepName => "login";
+    }
     private class FakeLoginTarget(FakeTokenResponse response) : ITarget
     {
         public bool CanHandle(Type _) => true;
-        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
             => Task.FromResult((TResponse)(object)response);
     }
 
@@ -303,7 +320,7 @@ public class HttpTargetHeaderTests : IDisposable
     {
         var fakeLogin  = new FakeLoginTarget(new FakeTokenResponse("my-token"));
         var httpTarget = Target()
-            .Register(new FromAuthStep())
+            .Register<FromAuthStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<FakeTokenResponse>("login").Token}")

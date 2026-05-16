@@ -12,7 +12,10 @@ namespace Walkthrough.UnitTests;
 public class WorkflowContextPollTests
 {
     private record StatusResponse(string Status);
-    private record GetStatusRequest() : WorkflowRequest<StatusResponse>("getStatus");
+    private record GetStatusRequest() : WorkflowRequest<StatusResponse, GetStatusRequest>, IWorkflowRequest
+    {
+        public static string StepName => "getStatus";
+    }
 
     private class FakeTarget : ITarget
     {
@@ -22,7 +25,7 @@ public class WorkflowContextPollTests
         public bool CanHandle(Type _) => true;
         public void Enqueue<T>(T response) => _responses.Enqueue(response!);
 
-        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
         {
             CallCount++;
             return Task.FromResult((TResponse)_responses.Dequeue());

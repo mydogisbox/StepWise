@@ -16,27 +16,29 @@ public record AddOrderItem() : BuildableRequest<AddOrderItemResponse>
     public IFieldValue<decimal> UnitPrice   { get; init; } = Static(9.99m);
 }
 
-public record CreateOrderRequest() : HttpWorkflowRequest<OrderResponse>("createOrder")
+public record CreateOrderRequest() : WorkflowRequest<OrderResponse, CreateOrderRequest>, IWorkflowRequest
 {
-    public IFieldValue<string>                            UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
-    public IFieldValue<List<object>> Items { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
+    public static string StepName => "createOrder";
+    public IFieldValue<string>       UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
+    public IFieldValue<List<object>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<AddOrderItem>());
 }
 
-public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse>
+public class CreateOrderStep : HttpStep<CreateOrderRequest, OrderResponse, CreateOrderStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Post;
-    public override string     Path   => "/orders";
+    public static HttpMethod Method => HttpMethod.Post;
+    public static string     Path   => "/orders";
 }
 
-public record GetOrderRequest() : HttpWorkflowRequest<OrderResponse>("getOrder")
+public record GetOrderRequest() : WorkflowRequest<OrderResponse, GetOrderRequest>, IWorkflowRequest
 {
+    public static string StepName => "getOrder";
     public IFieldValue<string> OrderId { get; init; } = From(ctx => ctx.Get<OrderResponse>("createOrder").Id);
 }
 
-public class GetOrderStep : HttpStep<GetOrderRequest, OrderResponse>
+public class GetOrderStep : HttpStep<GetOrderRequest, OrderResponse, GetOrderStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Get;
-    public override string     Path   => "/orders/{orderId}";
+    public static HttpMethod Method => HttpMethod.Get;
+    public static string     Path   => "/orders/{orderId}";
 }
 
 // Polymorphic order items — shared fields live on the base; each subtype adds its own unique field.
@@ -87,17 +89,18 @@ public record DigitalLineItem() : BuildableRequest<DigitalLineItemResponse>
     public IFieldValue<string>  DownloadUrl { get; init; } = Static("https://example.com/ebook");
 }
 
-public record TypeMappedOrderRequest() : HttpWorkflowRequest<OrderResponse>("typeMappedOrder")
+public record TypeMappedOrderRequest() : WorkflowRequest<OrderResponse, TypeMappedOrderRequest>, IWorkflowRequest
 {
+    public static string StepName => "typeMappedOrder";
     public IFieldValue<string>       UserId { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<List<object>> Items  { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
 }
 
 // MapBody pattern-matches on the concrete response type to include type-specific fields.
-public class TypeMappedOrderStep : HttpStep<TypeMappedOrderRequest, OrderResponse>
+public class TypeMappedOrderStep : HttpStep<TypeMappedOrderRequest, OrderResponse, TypeMappedOrderStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Post;
-    public override string     Path   => "/orders";
+    public static HttpMethod Method => HttpMethod.Post;
+    public static string     Path   => "/orders";
 
     public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields)
     {

@@ -7,7 +7,7 @@ namespace Walkthrough.Core;
 /// </summary>
 public interface ITarget
 {
-    Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context);
+    Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context);
 
     /// <summary>
     /// Returns true if this target can handle requests of the given type.

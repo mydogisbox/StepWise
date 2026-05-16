@@ -6,5 +6,5 @@ namespace Walkthrough.Core;
 /// </summary>
 public interface IRawTarget
 {
-    Task<object> ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context);
+    Task<object> ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context);
 }

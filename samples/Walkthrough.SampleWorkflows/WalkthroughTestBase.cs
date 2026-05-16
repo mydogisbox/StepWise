@@ -14,16 +14,16 @@ public abstract class WalkthroughTestBase
         var context = new WorkflowContext();
 
         var loginTarget = new HttpTarget(SampleApiUrl)
-            .Register(new LoginStep());
+            .Register<LoginStep>();
 
         var apiTarget = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new UpdateUserAddressStep())
-            .Register(new GetUsersByRoleStep())
-            .Register(new CreateOrderStep())
-            .Register(new GetOrderStep())
-            .Register(new EchoHeadersStep())
-            .Register(new EchoHeadersWithStepHeaderStep())
+            .Register<CreateUserStep>()
+            .Register<UpdateUserAddressStep>()
+            .Register<GetUsersByRoleStep>()
+            .Register<CreateOrderStep>()
+            .Register<GetOrderStep>()
+            .Register<EchoHeadersStep>()
+            .Register<EchoHeadersWithStepHeaderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => ctx.HasCapture("login")
@@ -34,10 +34,12 @@ public abstract class WalkthroughTestBase
         _runner = new WorkflowRunner(context, loginTarget, apiTarget);
     }
 
-    protected Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request)
+    protected Task<TResponse> ExecuteAsync<TResponse, TSelf>(WorkflowRequest<TResponse, TSelf> request)
+        where TSelf : WorkflowRequest<TResponse, TSelf>, IWorkflowRequest
         => _runner.ExecuteAsync(request);
 
-    protected Task<object> ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request)
+    protected Task<object> ExecuteRawAsync<TResponse, TSelf>(WorkflowRequest<TResponse, TSelf> request)
+        where TSelf : WorkflowRequest<TResponse, TSelf>, IWorkflowRequest
         => _runner.ExecuteRawAsync(request);
 
     protected Task<TResponse> BuildAsync<TResponse>(BuildableRequest<TResponse> item)

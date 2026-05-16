@@ -172,10 +172,10 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
 {
     private const string SampleApiUrl = "http://localhost:4200";
 
-    private class ExplicitCreateUserStep : HttpStep<CreateUserRequest, UserResponse>
+    private class ExplicitCreateUserStep : HttpStep<CreateUserRequest, UserResponse, ExplicitCreateUserStep>, IHttpStep
     {
-        public override HttpMethod Method => HttpMethod.Post;
-        public override string     Path   => "/users";
+        public static HttpMethod Method => HttpMethod.Post;
+        public static string     Path   => "/users";
 
         public override Dictionary<string, object?> MapBody(Dictionary<string, object?> resolvedFields) => new()
         {
@@ -191,9 +191,9 @@ public class MapBody_ExplicitFieldMapping_WorksCorrectly
     {
         var context = new WorkflowContext();
 
-        var loginTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var loginTarget = new HttpTarget(SampleApiUrl).Register<LoginStep>();
         var apiTarget   = new HttpTarget(SampleApiUrl)
-            .Register(new ExplicitCreateUserStep())
+            .Register<ExplicitCreateUserStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -254,11 +254,11 @@ public class PlacedOrder_CanBePolled
     [Fact]
     public async Task Test()
     {
-        var authTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var authTarget = new HttpTarget(SampleApiUrl).Register<LoginStep>();
         var apiTarget  = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new CreateOrderStep())
-            .Register(new GetOrderStep())
+            .Register<CreateUserStep>()
+            .Register<CreateOrderStep>()
+            .Register<GetOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -321,11 +321,11 @@ public class MixedItemTypes_MappedByType
     public async Task Test()
     {
         var authTarget = new HttpTarget(SampleApiUrl)
-            .Register(new LoginStep());
+            .Register<LoginStep>();
 
         var apiTarget = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new TypeMappedOrderStep())
+            .Register<CreateUserStep>()
+            .Register<TypeMappedOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -363,11 +363,10 @@ public class Login_ViaCustomTarget_CanPlaceOrder
         public bool CanHandle(Type _) => true;
 
         public async Task<TResponse> ExecuteAsync<TResponse>(
-            WorkflowRequest<TResponse> request, WorkflowContext context)
+            WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
         {
-            var fields = FieldValueResolver.Resolve(request, context);
             var content = new StringContent(
-                JsonSerializer.Serialize(fields), Encoding.UTF8, "application/json");
+                JsonSerializer.Serialize(resolvedFields), Encoding.UTF8, "application/json");
             var response = await _http.PostAsync($"{baseUrl}/auth/login", content);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync();
@@ -379,8 +378,8 @@ public class Login_ViaCustomTarget_CanPlaceOrder
     public async Task Test()
     {
         var httpTarget = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new CreateOrderStep())
+            .Register<CreateUserStep>()
+            .Register<CreateOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -421,10 +420,9 @@ public class ThreeTargets_HttpAndDirectMixed
         public bool CanHandle(Type _) => true;
 
         public async Task<TResponse> ExecuteAsync<TResponse>(
-            WorkflowRequest<TResponse> request, WorkflowContext context)
+            WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
         {
-            var fields  = FieldValueResolver.Resolve(request, context);
-            var orderId = fields["OrderId"]?.ToString();
+            var orderId = resolvedFields["OrderId"]?.ToString();
             var token   = context.Get<LoginResponse>("login").Token;
 
             var httpRequest = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/orders/{orderId}");
@@ -440,10 +438,10 @@ public class ThreeTargets_HttpAndDirectMixed
     [Fact]
     public async Task Test()
     {
-        var authTarget   = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var authTarget   = new HttpTarget(SampleApiUrl).Register<LoginStep>();
         var apiTarget    = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new CreateOrderStep())
+            .Register<CreateUserStep>()
+            .Register<CreateOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -481,11 +479,11 @@ public class MultiTarget_EachTargetHandlesItsOwnSteps
     public async Task Test()
     {
         var loginTarget = new HttpTarget(SampleApiUrl)
-            .Register(new LoginStep());
+            .Register<LoginStep>();
 
         var apiTarget = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new CreateOrderStep())
+            .Register<CreateUserStep>()
+            .Register<CreateOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -528,11 +526,10 @@ public class SameWorkflow_DifferentTargetImplementations
         public bool CanHandle(Type _) => true;
 
         public async Task<TResponse> ExecuteAsync<TResponse>(
-            WorkflowRequest<TResponse> request, WorkflowContext context)
+            WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
         {
-            var fields  = FieldValueResolver.Resolve(request, context);
             var content = new StringContent(
-                JsonSerializer.Serialize(fields, HttpExecutor.SerializeOptions), Encoding.UTF8, "application/json");
+                JsonSerializer.Serialize(resolvedFields, HttpExecutor.SerializeOptions), Encoding.UTF8, "application/json");
             var response = await _http.PostAsync($"{baseUrl}/auth/login", content);
             response.EnsureSuccessStatusCode();
             return HttpExecutor.Deserialize<TResponse>(await response.Content.ReadAsStringAsync());
@@ -542,10 +539,10 @@ public class SameWorkflow_DifferentTargetImplementations
     [Fact]
     public async Task ViaRegisteredSteps()
     {
-        var authTarget = new HttpTarget(SampleApiUrl).Register(new LoginStep());
+        var authTarget = new HttpTarget(SampleApiUrl).Register<LoginStep>();
         var apiTarget  = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new CreateOrderStep())
+            .Register<CreateUserStep>()
+            .Register<CreateOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")
@@ -562,8 +559,8 @@ public class SameWorkflow_DifferentTargetImplementations
     public async Task ViaCustomLoginTarget()
     {
         var apiTarget = new HttpTarget(SampleApiUrl)
-            .Register(new CreateUserStep())
-            .Register(new CreateOrderStep())
+            .Register<CreateUserStep>()
+            .Register<CreateOrderStep>()
             .WithHeaders(new Dictionary<string, IFieldValue<string>>
             {
                 ["Authorization"] = From(ctx => $"Bearer {ctx.Get<LoginResponse>("login").Token}")

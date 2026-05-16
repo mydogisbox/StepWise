@@ -4,71 +4,52 @@ namespace Walkthrough.Http;
 
 /// <summary>
 /// An execution target that sends requests over HTTP.
-/// Register request types with their steps via Register() before use.
+/// Register request types with their steps via Register&lt;TStep&gt;() before use.
 /// </summary>
-public class HttpTarget : ITarget, IRawTarget
+public class HttpTarget : Target<HttpTarget, HttpStep>, ITarget, IRawTarget
 {
     private readonly string _baseUrl;
-    private readonly IReadOnlyDictionary<string, IFieldValue<string>> _headers;
-    private readonly IReadOnlyDictionary<Type, object> _steps;
+    private IReadOnlyDictionary<string, IFieldValue<string>> _headers = new Dictionary<string, IFieldValue<string>>();
 
     public HttpTarget(string baseUrl)
     {
         _baseUrl = baseUrl.TrimEnd('/');
-        _headers = new Dictionary<string, IFieldValue<string>>();
-        _steps   = new Dictionary<Type, object>();
     }
 
-    private HttpTarget(string baseUrl,
-        IReadOnlyDictionary<string, IFieldValue<string>> headers,
-        IReadOnlyDictionary<Type, object> steps)
-    {
-        _baseUrl = baseUrl.TrimEnd('/');
-        _headers = headers;
-        _steps   = steps;
-    }
-
-    /// <summary>Returns a new target that sends the given headers with every request.</summary>
+    /// <summary>Sets the headers sent with every request.</summary>
     public HttpTarget WithHeaders(IReadOnlyDictionary<string, IFieldValue<string>> headers)
-        => new(_baseUrl, headers, _steps);
-
-    /// <summary>Registers a step to handle requests of type TRequest.</summary>
-    public HttpTarget Register<TRequest, TResponse>(HttpStep<TRequest, TResponse> step)
-        where TRequest : HttpWorkflowRequest<TResponse>
     {
-        var newSteps = new Dictionary<Type, object>(_steps) { [typeof(TRequest)] = step };
-        return new(_baseUrl, _headers, newSteps);
+        _headers = headers;
+        return this;
     }
 
-    bool ITarget.CanHandle(Type requestType) => _steps.ContainsKey(requestType);
-
-    Task<TResponse> ITarget.ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+    /// <summary>Registers a step to handle requests of type TConcreteStep.</summary>
+    public HttpTarget Register<TConcreteStep>()
+        where TConcreteStep : HttpStep, IHttpStep, new()
     {
-        if (request is not HttpWorkflowRequest<TResponse> httpRequest)
-            throw new HttpStepException(
-                $"HttpTarget requires an HttpWorkflowRequest. Got '{request.GetType().Name}'.");
-
-        if (!_steps.TryGetValue(httpRequest.GetType(), out var step))
-            throw new HttpStepException(
-                $"No step registered for '{httpRequest.GetType().Name}'. " +
-                $"Call .Register(new YourStep()) on the HttpTarget.");
-
-        var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
-        return ((IHttpStep<TResponse>)step).RunAsync(_baseUrl, httpRequest, targetHeaders, context);
+        return Register(new TConcreteStep());
     }
 
-    Task<object> IRawTarget.ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+    Task<TResponse> ITarget.ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
     {
-        if (request is not HttpWorkflowRequest<TResponse> httpRequest)
-            throw new HttpStepException(
-                $"HttpTarget requires an HttpWorkflowRequest. Got '{request.GetType().Name}'.");
-
-        if (!_steps.TryGetValue(httpRequest.GetType(), out var step))
-            throw new HttpStepException(
-                $"No step registered for '{httpRequest.GetType().Name}'. " +
-                $"Call .Register(new YourStep()) on the HttpTarget.");
-
+        var step          = GetStep(request);
         var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
-        return ((IHttpStep<TResponse>)step).RunRawAsync(_baseUrl, httpRequest, targetHeaders, context);
+        return ((IHttpStep<TResponse>)step).RunAsync(_baseUrl, resolvedFields, targetHeaders);
+    }
+
+    Task<object> IRawTarget.ExecuteRawAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
+    {
+        var step          = GetStep(request);
+        var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
+        return ((IHttpStep<TResponse>)step).RunRawAsync(_baseUrl, resolvedFields, targetHeaders);
+    }
+
+    private HttpStep GetStep<TResponse>(WorkflowRequest<TResponse> request)
+    {
+        if (!_steps.TryGetValue(request.GetType(), out var step))
+            throw new HttpStepException(
+                $"No step registered for '{request.GetType().Name}'. " +
+                $"Call .Register<YourStep>() on the HttpTarget.");
+        return step;
     }
 }

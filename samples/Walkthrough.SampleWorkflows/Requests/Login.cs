@@ -6,14 +6,15 @@ namespace Walkthrough.SampleWorkflows;
 
 public record LoginResponse(string Token, string UserId);
 
-public record LoginRequest() : HttpWorkflowRequest<LoginResponse>("login")
+public record LoginRequest() : WorkflowRequest<LoginResponse, LoginRequest>, IWorkflowRequest
 {
+    public static string StepName => "login";
     public IFieldValue<string> Username { get; init; } = Generated(() => $"user-{Guid.NewGuid():N}@test.com");
     public IFieldValue<string> Password { get; init; } = Static("Password123!");
 }
 
-public class LoginStep : HttpStep<LoginRequest, LoginResponse>
+public class LoginStep : HttpStep<LoginRequest, LoginResponse, LoginStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Post;
-    public override string Path => "/auth/login";
+    public static HttpMethod Method => HttpMethod.Post;
+    public static string     Path   => "/auth/login";
 }

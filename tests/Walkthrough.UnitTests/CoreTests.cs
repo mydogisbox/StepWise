@@ -34,11 +34,14 @@ public class FieldValueTests
 public class WorkflowContextTests
 {
     private record FakeResponse();
-    private record FakeRequest() : WorkflowRequest<FakeResponse>("login");
+    private record FakeRequest() : WorkflowRequest<FakeResponse, FakeRequest>, IWorkflowRequest
+    {
+        public static string StepName => "login";
+    }
     private class FakeTarget : ITarget
     {
         public bool CanHandle(Type _) => true;
-        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, WorkflowContext context)
+        public Task<TResponse> ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
             => Task.FromResult((TResponse)(object)new FakeResponse());
     }
 
@@ -62,6 +65,59 @@ public class WorkflowContextTests
         var context = new WorkflowContext();
         Assert.False(context.HasCapture("login"));
     }
+
+    [Fact]
+    public async Task HasCapture_ReturnsTrue_AfterStepExecutes()
+    {
+        var context = new WorkflowContext();
+        var runner  = new WorkflowRunner(context, _ => new FakeTarget());
+        await runner.ExecuteAsync(new FakeRequest());
+        Assert.True(context.HasCapture("login"));
+    }
+}
+
+public class HasCaptureInFromLambdaTests
+{
+    private record TokenResponse(string Token);
+    private record LoginRequest() : WorkflowRequest<TokenResponse, LoginRequest>, IWorkflowRequest
+    {
+        public static string StepName => "login";
+    }
+    private record PayloadResponse(string Authorization);
+    private record ApiRequest() : WorkflowRequest<PayloadResponse, ApiRequest>, IWorkflowRequest
+    {
+        public static string StepName => "api";
+        public IFieldValue<string> Authorization { get; init; } =
+            From(ctx => ctx.HasCapture("login")
+                ? $"Bearer {ctx.Get<TokenResponse>("login").Token}"
+                : "");
+    }
+
+    private class FakeLogin(string token) : ITarget
+    {
+        public bool CanHandle(Type _) => true;
+        public Task<T> ExecuteAsync<T>(WorkflowRequest<T> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
+            => Task.FromResult((T)(object)new TokenResponse(token));
+    }
+
+    [Fact]
+    public void HasCapture_False_FromLambdaReturnsFallback()
+    {
+        var context  = new WorkflowContext();
+        var resolved = FieldValueResolver.Resolve(new ApiRequest(), context);
+        Assert.Equal("", resolved["Authorization"]);
+    }
+
+    [Fact]
+    public async Task HasCapture_True_FromLambdaReturnsValue()
+    {
+        var context = new WorkflowContext();
+        var runner  = new WorkflowRunner(context, _ => new FakeLogin("tok-abc"));
+        await runner.ExecuteAsync(new LoginRequest());
+
+        var resolved = FieldValueResolver.Resolve(new ApiRequest(), context);
+        Assert.Equal("Bearer tok-abc", resolved["Authorization"]);
+    }
 }
 
 public class FieldValueResolverTests
@@ -69,8 +125,9 @@ public class FieldValueResolverTests
     private record TestResponse;
     private class TestProtocol;
 
-    private record TestRequest<TProtocol>() : WorkflowRequest<TestResponse>("test")
+    private record TestRequest<TProtocol>() : WorkflowRequest<TestResponse, TestRequest<TProtocol>>, IWorkflowRequest
     {
+        public static string StepName => "test";
         public IFieldValue<string> Name  { get; init; } = Static("Alice");
         public IFieldValue<int>    Count { get; init; } = Static(42);
     }
@@ -109,8 +166,9 @@ public class RecursiveFieldValueTests
         public IFieldValue<string> Value { get; init; } = Static("default");
     }
 
-    private record Outer() : WorkflowRequest<object>("test")
+    private record Outer() : WorkflowRequest<object, Outer>, IWorkflowRequest
     {
+        public static string StepName => "test";
         public IFieldValue<Inner> Nested { get; init; } = Static(new Inner());
     }
 
@@ -124,8 +182,9 @@ public class RecursiveFieldValueTests
         public IFieldValue<DeepInner> Inner { get; init; } = Static(new DeepInner());
     }
 
-    private record DeepOuter() : WorkflowRequest<object>("test")
+    private record DeepOuter() : WorkflowRequest<object, DeepOuter>, IWorkflowRequest
     {
+        public static string StepName => "test";
         public IFieldValue<MiddleLayer> Middle { get; init; } = Static(new MiddleLayer());
     }
 
@@ -246,8 +305,9 @@ public class BuildableRequestAccumulationTests
         public IFieldValue<int>    Count { get; init; } = Static(1);
     }
 
-    private record OrderRequest() : WorkflowRequest<FakeResponse>("createOrder")
+    private record OrderRequest() : WorkflowRequest<FakeResponse, OrderRequest>, IWorkflowRequest
     {
+        public static string StepName => "createOrder";
         public IFieldValue<List<object>> Items { get; init; } = From(ctx => ctx.GetAccumulated<LineItem>());
     }
 
@@ -344,6 +404,19 @@ public class BuildableRequestAccumulationTests
         Assert.Equal(2, items.Count);
         Assert.Equal("Widget", Assert.IsType<LineItemResponse>(items[0]).Name);
         Assert.Equal("Gadget", Assert.IsType<LineItemResponse>(items[1]).Name);
+    }
+
+    [Fact]
+    public async Task GetAccumulated_ClearsAccumulation_OnRead()
+    {
+        var (ctx, runner) = Make();
+        await runner.BuildAsync(new LineItem() with { Name = Static("Widget") });
+
+        var first  = ctx.GetAccumulated<LineItem>();
+        var second = ctx.GetAccumulated<LineItem>();
+
+        Assert.Single(first);
+        Assert.Empty(second);
     }
 
     private record BaseItemResponse(string Kind);
@@ -466,11 +539,15 @@ public class MultiTargetWorkflowTests
     private record TokenResponse(string Token);
     private record UserResponse(string Id);
 
-    private record LoginRequest() : WorkflowRequest<TokenResponse>("login");
+    private record LoginRequest() : WorkflowRequest<TokenResponse, LoginRequest>, IWorkflowRequest
+    {
+        public static string StepName => "login";
+    }
 
     // Token field resolves from the login capture — produced by a different target.
-    private record CreateUserRequest() : WorkflowRequest<UserResponse>("createUser")
+    private record CreateUserRequest() : WorkflowRequest<UserResponse, CreateUserRequest>, IWorkflowRequest
     {
+        public static string StepName => "createUser";
         public IFieldValue<string> Token { get; init; } = From(ctx => ctx.Get<TokenResponse>("login").Token);
     }
 
@@ -478,7 +555,7 @@ public class MultiTargetWorkflowTests
     {
         public int CallCount { get; private set; }
         public bool CanHandle(Type _) => true;
-        public Task<T> ExecuteAsync<T>(WorkflowRequest<T> request, WorkflowContext context)
+        public Task<T> ExecuteAsync<T>(WorkflowRequest<T> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
         {
             CallCount++;
             return Task.FromResult((T)(object)response!);

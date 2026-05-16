@@ -6,18 +6,19 @@ namespace Walkthrough.SampleWorkflows;
 
 public record UserResponse(string Id, string Email, string FirstName, string LastName, string Role);
 
-public record CreateUserRequest() : HttpWorkflowRequest<UserResponse>("createUser")
+public record CreateUserRequest() : WorkflowRequest<UserResponse, CreateUserRequest>, IWorkflowRequest
 {
+    public static string StepName => "createUser";
     public IFieldValue<string> Email     { get; init; } = Generated(() => $"user-{Guid.NewGuid():N}@test.com");
     public IFieldValue<string> FirstName { get; init; } = Static("Test");
     public IFieldValue<string> LastName  { get; init; } = Static("User");
     public IFieldValue<string> Role      { get; init; } = Static("user");
 }
 
-public class CreateUserStep : HttpStep<CreateUserRequest, UserResponse>
+public class CreateUserStep : HttpStep<CreateUserRequest, UserResponse, CreateUserStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Post;
-    public override string     Path   => "/users";
+    public static HttpMethod Method => HttpMethod.Post;
+    public static string     Path   => "/users";
 }
 
 // --- UpdateUserAddress ---
@@ -51,29 +52,31 @@ public record ContactFields
     public IFieldValue<PrimaryFields> Primary { get; init; } = Static(new PrimaryFields());
 }
 
-public record UpdateUserAddressRequest() : HttpWorkflowRequest<UpdateUserAddressResponse>("updateUserAddress")
+public record UpdateUserAddressRequest() : WorkflowRequest<UpdateUserAddressResponse, UpdateUserAddressRequest>, IWorkflowRequest
 {
+    public static string StepName => "updateUserAddress";
     public IFieldValue<string>        UserId  { get; init; } = From(ctx => ctx.Get<UserResponse>("createUser").Id);
     public IFieldValue<ContactFields> Contact { get; init; } = Static(new ContactFields());
 }
 
-public class UpdateUserAddressStep : HttpStep<UpdateUserAddressRequest, UpdateUserAddressResponse>
+public class UpdateUserAddressStep : HttpStep<UpdateUserAddressRequest, UpdateUserAddressResponse, UpdateUserAddressStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Put;
-    public override string     Path   => "/users/{userId}/address";
+    public static HttpMethod Method => HttpMethod.Put;
+    public static string     Path   => "/users/{userId}/address";
 }
 
 // --- GetUsersByRole ---
 
-public record GetUsersByRoleRequest() : HttpWorkflowRequest<List<UserResponse>>("getUsersByRole")
+public record GetUsersByRoleRequest() : WorkflowRequest<List<UserResponse>, GetUsersByRoleRequest>, IWorkflowRequest
 {
+    public static string StepName => "getUsersByRole";
     public IFieldValue<string> Role { get; init; } = Static("user");
 }
 
-public class GetUsersByRoleStep : HttpStep<GetUsersByRoleRequest, List<UserResponse>>
+public class GetUsersByRoleStep : HttpStep<GetUsersByRoleRequest, List<UserResponse>, GetUsersByRoleStep>, IHttpStep
 {
-    public override HttpMethod Method => HttpMethod.Get;
-    public override string     Path   => "/users";
+    public static HttpMethod Method => HttpMethod.Get;
+    public static string     Path   => "/users";
 
     public override Dictionary<string, string> MapQuery(Dictionary<string, object?> resolvedFields)
         => new() { ["role"] = resolvedFields["Role"]?.ToString() ?? "" };

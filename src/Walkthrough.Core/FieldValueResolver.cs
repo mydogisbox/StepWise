@@ -2,43 +2,26 @@ using System.Reflection;
 
 namespace Walkthrough.Core;
 
-/// <summary>
-/// Resolves all IFieldValue&lt;T&gt; properties on a record,
-/// returning a plain dictionary of field name → resolved value.
-/// </summary>
 public static class FieldValueResolver
 {
     private static readonly Type FieldValueOpenGeneric = typeof(IFieldValue<>);
 
-    private static readonly HashSet<string> ExcludedProperties = new()
-    {
-        nameof(WorkflowRequest<object>.StepName),
-        "EqualityContract",
-    };
-
-    /// <summary>
-    /// Resolves all IFieldValue&lt;T&gt; body properties on a WorkflowRequest.
-    /// </summary>
     public static Dictionary<string, object?> Resolve<TResponse>(
         WorkflowRequest<TResponse> request,
         WorkflowContext context)
-        => ResolveProperties(request, context, ExcludedProperties,
+        => ResolveProperties(request, context, [],
             t => t == typeof(WorkflowRequest<TResponse>));
 
-    /// <summary>Resolves a flat dictionary of named string field values into plain values.</summary>
     public static Dictionary<string, string> ResolveGroup(
         IReadOnlyDictionary<string, IFieldValue<string>> fields,
         WorkflowContext context)
         => fields.ToDictionary(kv => kv.Key, kv => kv.Value.Resolve(context));
 
-    /// <summary>
-    /// Resolves all IFieldValue&lt;T&gt; properties on a BuildableRequest.
-    /// </summary>
     public static Dictionary<string, object?> ResolveObject(
         BuildableRequest item,
         WorkflowContext context)
         => ResolveProperties(item, context,
-            new HashSet<string> { "EqualityContract", nameof(BuildableRequest.AccumulationKey) },
+            [nameof(BuildableRequest.AccumulationKey)],
             t => t == typeof(BuildableRequest));
 
     private static Dictionary<string, object?> ResolveProperties(
@@ -99,7 +82,7 @@ public static class FieldValueResolver
 
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         if (properties.Any(p => GetFieldValueInterface(p.PropertyType) is not null))
-            return ResolveProperties(value, context, new HashSet<string> { "EqualityContract" }, _ => false);
+            return ResolveProperties(value, context, [], _ => false);
 
         return value;
     }
