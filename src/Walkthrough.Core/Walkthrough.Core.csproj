@@ -28,6 +28,11 @@
       <PackagePath>build/claude/json-style.md</PackagePath>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Content>
+    <Content Include="..\..\docs\claude\upgrade-0.3-to-0.4.md">
+      <Pack>true</Pack>
+      <PackagePath>build/claude/upgrade-0.3-to-0.4.md</PackagePath>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,5 @@
 <Project>
-  <Target Name="CopyWalkthroughClaudeDocs" BeforeTargets="Build"
-          Condition="!Exists('$(MSBuildProjectDirectory)/.claude/walkthrough/CLAUDE.md')">
+  <Target Name="CopyWalkthroughClaudeDocs" BeforeTargets="Build">
     <PropertyGroup>
       <_WalkthroughDocsSrc>$(MSBuildThisFileDirectory)claude/</_WalkthroughDocsSrc>
       <_WalkthroughDocsDest>$(MSBuildProjectDirectory)/.claude/walkthrough/</_WalkthroughDocsDest>

@@ -17,4 +17,18 @@ public abstract class Target<TSelf, TStep>
         _steps[step.RequestType] = step;
         return (TSelf)this;
     }
+
+    public TSelf Register<TConcreteStep>()
+        where TConcreteStep : TStep, new()
+    {
+        return Register(new TConcreteStep());
+    }
+
+    protected TStep GetStep<TResponse>(WorkflowRequest<TResponse> request)
+    {
+        if (!_steps.TryGetValue(request.GetType(), out var step))
+            throw new InvalidOperationException(
+                $"No step registered for '{request.GetType().Name}'.");
+        return step;
+    }
 }

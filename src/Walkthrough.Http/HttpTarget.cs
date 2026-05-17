@@ -23,13 +23,6 @@ public class HttpTarget : Target<HttpTarget, HttpStep>, ITarget, IRawTarget
         return this;
     }
 
-    /// <summary>Registers a step to handle requests of type TConcreteStep.</summary>
-    public HttpTarget Register<TConcreteStep>()
-        where TConcreteStep : HttpStep, IHttpStep, new()
-    {
-        return Register(new TConcreteStep());
-    }
-
     Task<TResponse> ITarget.ExecuteAsync<TResponse>(WorkflowRequest<TResponse> request, Dictionary<string, object?> resolvedFields, WorkflowContext context)
     {
         var step          = GetStep(request);
@@ -42,14 +35,5 @@ public class HttpTarget : Target<HttpTarget, HttpStep>, ITarget, IRawTarget
         var step          = GetStep(request);
         var targetHeaders = FieldValueResolver.ResolveGroup(_headers, context);
         return ((IHttpStep<TResponse>)step).RunRawAsync(_baseUrl, resolvedFields, targetHeaders);
-    }
-
-    private HttpStep GetStep<TResponse>(WorkflowRequest<TResponse> request)
-    {
-        if (!_steps.TryGetValue(request.GetType(), out var step))
-            throw new HttpStepException(
-                $"No step registered for '{request.GetType().Name}'. " +
-                $"Call .Register<YourStep>() on the HttpTarget.");
-        return step;
     }
 }

@@ -28,21 +28,26 @@ Run tests after every change to verify nothing is broken.
 
 ```
 Walkthrough.Core
-├── WorkflowRequest<TResponse>     — transport-agnostic base record; carries only StepName
-├── BuildableRequest               — non-generic marker base for array item builders
-├── BuildableRequest<TResponse>    — generic base; TResponse is the resolved snapshot type returned by BuildAsync
-├── WorkflowContext                — pure state bag: captures and accumulations only; no execution logic
-├── ITarget                        — execute a request against a target; implemented by HttpTarget or any custom class
-├── WorkflowRunner                 — orchestrates execution: ExecuteAsync, PollAsync, BuildAsync
-├── IFieldValue<T>                 — interface for resolvable field values
-├── FieldValues                    — Static(), Generated(), From() factories
-└── FieldValueResolver             — reflection-based resolver
+├── WorkflowRequest<TResponse>          — transport-agnostic base record; base type used by ITarget
+├── WorkflowRequest<TResponse, TSelf>   — CRTP middle layer; TSelf : IWorkflowRequest gives access to static StepName
+├── IWorkflowRequest                    — static abstract StepName { get; }; implemented by every concrete request
+├── BuildableRequest                    — non-generic marker base for array item builders
+├── BuildableRequest<TResponse>         — generic base; TResponse is the resolved snapshot type returned by BuildAsync
+├── WorkflowContext                     — pure state bag: captures and accumulations only; no execution logic
+├── ITarget                             — execute a request against a target; implemented by HttpTarget or any custom class
+├── WorkflowRunner                      — orchestrates execution: ExecuteAsync, PollAsync, BuildAsync
+├── IFieldValue<T>                      — interface for resolvable field values
+├── FieldValues                         — Static(), Generated(), From() factories
+├── FieldValueResolver                  — reflection-based resolver
+└── Target<TSelf, TStep>                — base class for targets; manages step registration (Register, Register<T>, CanHandle, GetStep)
 
 Walkthrough.Http
-├── HttpWorkflowRequest<TResponse> — marker base for HTTP requests; carries only body fields (StepName only)
-├── HttpTarget : ITarget           — sends requests over HTTP; steps registered explicitly via Register()
-├── HttpExecutor                   — shared HTTP send/deserialize logic
-└── HttpStep<TRequest, TResponse>  — declares Method, Path, MapBody, MapQuery, and MapHeaders for one request type
+├── HttpTarget : ITarget                — sends requests over HTTP; steps registered via Register<TStep>()
+├── HttpExecutor                        — shared HTTP send/deserialize logic
+├── HttpStep                            — abstract base; internal constructor prevents direct external subclassing
+├── IHttpStep                           — static abstract Method and Path; declared on every concrete step class
+├── IHttpStep<TResponse>                — RunAsync / RunRawAsync dispatch interface; implemented by HttpStep<,,>
+└── HttpStep<TRequest, TResponse, TSelf> — CRTP step base; TSelf : IHttpStep; declares static Method, Path; override MapBody/MapQuery/MapHeaders as needed
 
 Walkthrough.Json
 ├── JsonWorkflowRunner             — pure engine: step execution, path resolution, assertion evaluation

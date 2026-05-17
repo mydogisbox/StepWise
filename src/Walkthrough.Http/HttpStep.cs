@@ -9,7 +9,7 @@ public interface IHttpStep
     static abstract string     Path   { get; }
 }
 
-internal interface IHttpStep<TResponse>
+public interface IHttpStep<TResponse>
 {
     Task<TResponse> RunAsync(string baseUrl, Dictionary<string, object?> resolvedFields, Dictionary<string, string> targetHeaders);
     Task<object>   RunRawAsync(string baseUrl, Dictionary<string, object?> resolvedFields, Dictionary<string, string> targetHeaders);
@@ -17,6 +17,8 @@ internal interface IHttpStep<TResponse>
 
 public abstract class HttpStep : IStep
 {
+    internal HttpStep() { }
+
     protected static readonly Regex PlaceholderRegex =
         new(@"\{(\w+)\}", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 

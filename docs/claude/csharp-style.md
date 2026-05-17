@@ -1,6 +1,6 @@
 # C# style
 
-_Current version: 0.4.0. Upgrading from 0.3.0? See [upgrade-0.3-to-0.4.md](upgrade-0.3-to-0.4.md)._
+_Current version: 0.4.4. Upgrading from 0.3.0? See [upgrade-0.3-to-0.4.md](upgrade-0.3-to-0.4.md)._
 
 ---
 
@@ -295,6 +295,17 @@ var runner = new WorkflowRunner(new WorkflowContext(),
 ```
 
 For cases where type-based routing isn't enough, `WorkflowRunner` also accepts a `Func<string, ITarget>` resolver that maps step names directly.
+
+### Dispatching through a registered HttpStep
+
+If a custom target wraps `HttpTarget`-style dispatch rather than using a raw `HttpClient`, cast the stored step to `IHttpStep<TResponse>` to call `RunAsync` or `RunRawAsync` directly:
+
+```csharp
+var step = /* retrieved HttpStep instance */;
+var result = await ((IHttpStep<TResponse>)step).RunAsync(baseUrl, resolvedFields, targetHeaders);
+```
+
+`HttpStep` can only be extended through `HttpStep<TRequest, TResponse, TSelf>` — direct subclassing of `HttpStep` is prevented at compile time. Any registered step is guaranteed to implement `IHttpStep<TResponse>` for its declared response type.
 
 ---
 
